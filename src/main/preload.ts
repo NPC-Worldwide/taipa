@@ -8,6 +8,7 @@ export interface IElectronAPI {
   showSaveDialog: (options: any) => Promise<any>;
   readFileContent: (filePath: string) => Promise<any>;
   writeFileContent: (filePath: string, content: string) => Promise<any>;
+  proxyFetch: (url: string, options?: any) => Promise<any>;
 }
 
 contextBridge.exposeInMainWorld('api', {
@@ -18,6 +19,7 @@ contextBridge.exposeInMainWorld('api', {
   showSaveDialog: (options: any) => ipcRenderer.invoke('show-save-dialog', options),
   readFileContent: (filePath: string) => ipcRenderer.invoke('read-file-content', filePath),
   writeFileContent: (filePath: string, content: string) => ipcRenderer.invoke('write-file-content', filePath, content),
+  proxyFetch: (url: string, options?: any) => ipcRenderer.invoke('proxy-fetch', url, options),
 } as IElectronAPI);
 
 declare global {

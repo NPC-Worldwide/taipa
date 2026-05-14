@@ -1,9 +1,126 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const IS_DEV = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+const BACKEND_PORT = IS_DEV ? '7138' : '5138';
+const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
+
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'media',
+  privileges: { standard: true, supportFetchAPI: true, stream: true, secure: true, corsEnabled: true }
+}]);
+
+let backendProcess: ReturnType<typeof spawn> | null = null;
+
+function killBackendProcess() {
+  if (!backendProcess) return;
+  console.log('[Main] Killing backend process');
+  if (process.platform === 'win32') {
+    try { require('child_process').execSync(`taskkill /F /T /PID ${backendProcess.pid}`, { stdio: 'ignore' }); } catch {}
+  } else {
+    try { process.kill(-backendProcess.pid, 'SIGTERM'); } catch {}
+  }
+  backendProcess = null;
+}
+
+function spawnBackendProcess(pythonPath: string, args: string[], env: Record<string, string>) {
+  console.log(`[Main] Spawning backend: ${pythonPath} ${args.join(' ')}`);
+  const proc = spawn(pythonPath, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+    detached: process.platform !== 'win32',
+    env,
+  });
+  proc.stdout.on('data', (d) => console.log('[Backend stdout]', d.toString().trim()));
+  proc.stderr.on('data', (d) => console.error('[Backend stderr]', d.toString().trim()));
+  proc.on('error', (err) => console.error('[Backend error]', err.message));
+  proc.on('close', (code) => console.log(`[Backend] exited with code ${code}`));
+  return proc;
+}
+
+async function waitForServer(maxAttempts = 60, delay = 1000) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${BACKEND_URL}/api/health`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) { console.log(`[Main] Backend ready (attempt ${i})`); return true; }
+    } catch {}
+    await new Promise(r => setTimeout(r, delay));
+  }
+  console.error('[Main] Backend failed to start');
+  return false;
+}
+
+function getPythonPath(): string | null {
+  const candidates = [
+    path.join(os.homedir(), '.npcsh', 'venv', 'bin', 'python3'),
+    path.join(os.homedir(), '.npcsh', 'venv', 'Scripts', 'python.exe'),
+    path.join(os.homedir(), '.venv', 'bin', 'python3'),
+    path.join(os.homedir(), '.venv', 'Scripts', 'python.exe'),
+  ];
+  for (const p of candidates) { if (fs.existsSync(p)) return p; }
+  try {
+    const which = require('child_process').execSync('which python3 || which python', { encoding: 'utf8' }).trim();
+    if (which) return which;
+  } catch {}
+  return null;
+}
+
+function getBackendPythonPath(): string | null {
+  const rc = path.join(os.homedir(), '.npcshrc');
+  try {
+    if (fs.existsSync(rc)) {
+      const content = fs.readFileSync(rc, 'utf8');
+      const m = content.match(/BACKEND_PYTHON_PATH=["']?([^"'\n]+)["']?/);
+      if (m?.[1]?.trim()) {
+        const p = m[1].trim().replace(/^~/, os.homedir());
+        if (fs.existsSync(p)) return p;
+      }
+    }
+  } catch {}
+  return getPythonPath();
+}
+
+async function startBackend() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`${BACKEND_URL}/api/health`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.ok) { console.log('[Main] Backend already running'); return true; }
+  } catch {}
+
+  const python = getBackendPythonPath();
+  if (!python) {
+    console.error('[Main] No Python found for backend');
+    return false;
+  }
+
+  const backendEnv = {
+    ...process.env,
+    TAIPA_PORT: BACKEND_PORT,
+    FRONTEND_PORT: IS_DEV ? '7338' : '6338',
+    FLASK_DEBUG: IS_DEV ? '1' : '0',
+    PYTHONUNBUFFERED: '1',
+    PYTHONIOENCODING: 'utf-8',
+    HOME: os.homedir(),
+    NPCSH_BASE: path.join(os.homedir(), '.npcsh'),
+  };
+
+  const scriptPath = path.join(__dirname, '..', 'resources', 'taipa_serve.py');
+  backendProcess = spawnBackendProcess(python, [scriptPath], backendEnv);
+  return await waitForServer();
+}
+
+app.on('before-quit', () => killBackendProcess());
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -13,21 +130,24 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      webSecurity: false,
+      allowRunningInsecureContent: true,
     },
   });
 
   if (IS_DEV) {
-    win.loadURL('http://localhost:5173');
+    win.loadURL('http://localhost:7338');
     win.webContents.openDevTools();
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await startBackend();
   createWindow();
 
   app.on('activate', () => {
@@ -96,5 +216,25 @@ ipcMain.handle('write-file-content', async (_, filePath: string, content: string
     return { success: true };
   } catch (e) {
     return { error: (e as Error).message };
+  }
+});
+
+ipcMain.handle('proxy-fetch', async (_event, url, options = {}) => {
+  try {
+    const resp = await fetch(url, {
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      body: options.body || undefined,
+    });
+    const contentType = resp.headers.get('content-type') || '';
+    let data;
+    if (contentType.includes('json')) {
+      data = await resp.json();
+    } else {
+      data = await resp.text();
+    }
+    return { ok: resp.ok, status: resp.status, data };
+  } catch (err) {
+    return { ok: false, status: 0, error: (err as Error).message };
   }
 });
