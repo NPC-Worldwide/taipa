@@ -6,6 +6,14 @@ export interface IElectronAPI {
   showSaveDialog: (options: any) => Promise<any>;
   readFileContent: (filePath: string) => Promise<any>;
   writeFileContent: (filePath: string, content: string) => Promise<any>;
+  proxyFetch: (url: string, options?: any) => Promise<any>;
+  compileLatex: (options: {
+    projectPath: string;
+    rootDocument: string;
+    engine: string;
+    outputDir: string;
+    bibTool?: string;
+  }) => Promise<any>;
 }
 
 declare global {
