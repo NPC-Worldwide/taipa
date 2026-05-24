@@ -181,9 +181,12 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
     });
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
     const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
-    const [showNewProject, setShowNewProject] = useState(false);
-    const [newProjectTitle, setNewProjectTitle] = useState('');
-    const [newProjectType, setNewProjectType] = useState<WritingProject['type']>('novel');
+    // (filesystem-only projects)
+    const [showFilesystemProject, setShowFilesystemProject] = useState(false);
+    const [fsProjectName, setFsProjectName] = useState('');
+    const [fsProjectType, setFsProjectType] = useState<'markdown_fiction' | 'latex_book' | 'plain_text' | 'docx_fiction'>('markdown_fiction');
+    const [fsProjectPath, setFsProjectPath] = useState('');
+    const [fsCreating, setFsCreating] = useState(false);
     const [writeSidebarOpen, setWriteSidebarOpen] = useState(true);
     const [writeView, setWriteView] = useState<'chapter' | 'outline' | 'characters' | 'notes'>('chapter');
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -485,6 +488,64 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
         }
     }, [projects, saveProjects]);
 
+    const selectProjectFolder = useCallback(async () => {
+        const result = await window.api?.showOpenDialog?.({
+            title: 'Select Parent Folder',
+            properties: ['openDirectory'],
+        });
+        if (result?.filePaths?.[0]) {
+            setFsProjectPath(result.filePaths[0]);
+        }
+    }, []);
+
+    const createFilesystemProject = useCallback(async () => {
+        if (!fsProjectName.trim() || !fsProjectPath) return;
+        setFsCreating(true);
+        try {
+            const dir = await window.api?.createDirectory?.(`${fsProjectPath}/${fsProjectName}`);
+            if (!dir) throw new Error('Failed to create directory');
+
+            const manifest: any = {
+                name: fsProjectName.trim(),
+                type: fsProjectType,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
+
+            if (fsProjectType === 'latex_book') {
+                manifest.files = ['main.tex', 'preamble.tex'];
+                await window.api?.writeFileContent?.(`${dir}/main.tex`, ['\\documentclass{book}', '\\input{preamble}', '\\begin{document}', '\\maketitle}', '\\chapter{Chapter One}', '\\end{document}'].join("\n"));
+                await window.api?.writeFileContent?.(`${dir}/preamble.tex`, ["\\usepackage[utf8]{inputenc}", "\\usepackage{amsmath}"].join("\n"));
+            } else if (fsProjectType === 'markdown_fiction') {
+                manifest.files = ['README.md'];
+                await window.api?.writeFileContent?.(`${dir}/README.md`, `# ${fsProjectName.trim()}
+
+A new Markdown fiction project.`);
+            } else if (fsProjectType === 'plain_text') {
+                manifest.files = ['README.txt'];
+                await window.api?.writeFileContent?.(`${dir}/README.txt`, `${fsProjectName.trim()}
+
+A new plain text project.`);
+            } else if (fsProjectType === 'docx_fiction') {
+                manifest.files = ['.gitkeep'];
+                await window.api?.writeFileContent?.(`${dir}/.gitkeep`, '');
+            }
+
+            await window.api?.createDirectory?.(`${dir}/.taipa`);
+            await window.api?.writeFileContent?.(`${dir}/.taipa/project.json`, JSON.stringify(manifest, null, 2));
+
+            setShowFilesystemProject(false);
+            setFsProjectName('');
+            setFsProjectPath('');
+            setFsProjectType('markdown_fiction');
+        } catch (e) {
+            console.error('Filesystem project creation failed:', e);
+            alert('Failed to create project: ' + (e as Error).message);
+        } finally {
+            setFsCreating(false);
+        }
+    }, [fsProjectName, fsProjectType, fsProjectPath]);
+
     // ─── Collections logic ───
     const createCollection = useCallback(() => {
         if (!newCollectionName.trim()) return;
@@ -643,8 +704,8 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
                         <button onClick={importProject} className="px-3 py-1.5 text-xs theme-bg-tertiary theme-hover rounded flex items-center gap-1">
                             <Upload size={12} /> Import
                         </button>
-                        <button onClick={() => setShowNewProject(true)} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-1">
-                            <Plus size={12} /> New Project
+                        <button onClick={() => setShowFilesystemProject(true)} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-1">
+                            <FolderOpen size={12} /> New Project
                         </button>
                     </div>
 
@@ -654,7 +715,7 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
                                 <PenTool size={48} className="opacity-30 mb-4" />
                                 <p>No writing projects yet</p>
                                 <p className="text-xs mt-2">Create a novel, story, screenplay, or journal</p>
-                                <button onClick={() => setShowNewProject(true)}
+                                <button onClick={() => setShowFilesystemProject(true)}
                                     className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
                                     Create Your First Project
                                 </button>
@@ -698,30 +759,64 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
                         )}
                     </div>
 
-                    {showNewProject && (
-                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setShowNewProject(false)}>
-                            <div className="theme-bg-secondary rounded-xl shadow-2xl p-6 w-[420px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-                                <h3 className="text-lg font-bold mb-4">New Writing Project</h3>
+
+                    {showFilesystemProject && (
+                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => !fsCreating && setShowFilesystemProject(false)}>
+                            <div className="theme-bg-secondary rounded-xl shadow-2xl p-6 w-[480px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+                                <h3 className="text-lg font-bold mb-4">New Folder Project</h3>
+                                <p className="text-xs text-gray-400 mb-4">Creates a real folder with a <code>.taipa/project.json</code> manifest.</p>
                                 <div className="space-y-3">
-                                    <input type="text" value={newProjectTitle} onChange={(e) => setNewProjectTitle(e.target.value)}
-                                        placeholder="Project title..." autoFocus
-                                        onKeyDown={(e) => { if (e.key === 'Enter') createProject(); }}
-                                        className="w-full px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                                     <div>
-                                        <label className="text-xs text-gray-400 mb-1 block">Type</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {(['novel', 'story', 'manga', 'screenplay', 'poetry', 'journal'] as const).map(t => (
-                                                <button key={t} onClick={() => setNewProjectType(t)}
-                                                    className={`px-3 py-2 rounded text-xs capitalize ${newProjectType === t ? 'bg-indigo-600 text-white' : 'theme-bg-tertiary theme-hover'}`}>
-                                                    {t}
+                                        <label className="text-xs text-gray-400 mb-1 block">Project Name</label>
+                                        <input type="text" value={fsProjectName} onChange={(e) => setFsProjectName(e.target.value)}
+                                            placeholder="e.g. My Novel"
+                                            className="w-full px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs text-gray-400 mb-1 block">Project Type</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {([
+                                                { id: 'markdown_fiction' as const, label: 'Markdown Fiction', desc: '.md files' },
+                                                { id: 'latex_book' as const, label: 'LaTeX Book', desc: '.tex + compile' },
+                                                { id: 'plain_text' as const, label: 'Plain Text', desc: '.txt files' },
+                                                { id: 'docx_fiction' as const, label: 'DOCX Fiction', desc: '.docx folder' },
+                                            ]).map(t => (
+                                                <button key={t.id} onClick={() => setFsProjectType(t.id)}
+                                                    className={`px-3 py-2 rounded text-xs text-left border ${fsProjectType === t.id ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' : 'theme-bg-tertiary theme-hover border-transparent'}`}>
+                                                    <div className="font-medium">{t.label}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-0.5">{t.desc}</div>
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
+
+                                    <div>
+                                        <label className="text-xs text-gray-400 mb-1 block">Parent Folder</label>
+                                        <div className="flex gap-2">
+                                            <input type="text" value={fsProjectPath}
+                                                readOnly
+                                                placeholder="Click Browse to choose..."
+                                                className="flex-1 px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm text-gray-400" />
+                                            <button onClick={selectProjectFolder}
+                                                className="px-3 py-2 theme-bg-tertiary theme-hover border theme-border rounded text-xs flex items-center gap-1 shrink-0">
+                                                <FolderOpen size={12} /> Browse
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <div className="flex gap-2 justify-end pt-2">
-                                        <button onClick={() => setShowNewProject(false)} className="px-4 py-2 theme-bg-tertiary rounded text-sm">Cancel</button>
-                                        <button onClick={createProject} disabled={!newProjectTitle.trim()}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded text-sm">Create</button>
+                                        <button onClick={() => setShowFilesystemProject(false)} disabled={fsCreating}
+                                            className="px-4 py-2 theme-bg-tertiary rounded text-sm disabled:opacity-50">Cancel</button>
+                                        <button onClick={createFilesystemProject}
+                                            disabled={!fsProjectName.trim() || !fsProjectPath || fsCreating}
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded text-sm flex items-center gap-1">
+                                            {fsCreating ? (
+                                                <><RefreshCw size={12} className="animate-spin" /> Creating...</>
+                                            ) : (
+                                                <><Plus size={12} /> Create Project</>
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
