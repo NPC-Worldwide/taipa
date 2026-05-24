@@ -714,7 +714,7 @@ A new plain text project.`);
                             <div className="flex flex-col items-center justify-center h-full text-gray-500">
                                 <PenTool size={48} className="opacity-30 mb-4" />
                                 <p>No writing projects yet</p>
-                                <p className="text-xs mt-2">Create a novel, story, screenplay, or journal</p>
+                                <p className="text-xs mt-2">Create a Markdown, LaTeX, Plain Text, or DOCX project</p>
                                 <button onClick={() => setShowFilesystemProject(true)}
                                     className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
                                     Create Your First Project
