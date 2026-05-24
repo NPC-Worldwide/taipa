@@ -1,19 +1,30 @@
 import React, { useState, useCallback } from 'react';
-import Grimoire from './components/Grimoire';
+import Taipa from './components/Taipa';
+import ProjectShell from './components/ProjectShell';
 import { getHomeDir } from './lib/utils';
 
+type AppMode = 'taipa' | 'project';
+
 export default function App() {
-  const [currentPath, setCurrentPath] = useState<string>('');
+  const [mode, setMode] = useState<AppMode>('taipa');
+  const [projectPath, setProjectPath] = useState<string>('');
+  const [homeDir, setHomeDir] = useState<string>('');
 
   React.useEffect(() => {
-    getHomeDir().then((dir) => setCurrentPath(dir));
+    getHomeDir().then((dir) => setHomeDir(dir));
   }, []);
 
-  const handleOpenDocument = useCallback((path: string, type: string) => {
-    console.log('Open document:', path, type);
+  const handleOpenProject = useCallback((path: string) => {
+    setProjectPath(path);
+    setMode('project');
   }, []);
 
-  if (!currentPath) {
+  const handleBackTotaipa = useCallback(() => {
+    setMode('taipa');
+    setProjectPath('');
+  }, []);
+
+  if (!homeDir) {
     return (
       <div className="h-screen w-screen theme-bg-primary flex items-center justify-center">
         <div className="text-gray-500">Loading...</div>
@@ -23,7 +34,30 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen theme-bg-primary overflow-hidden flex">
-      <Grimoire currentPath={currentPath} onOpenDocument={handleOpenDocument} />
+      {mode === 'taipa' && (
+        <Taipa
+          currentPath={homeDir}
+          onOpenDocument={() => {}}
+          onOpenProject={handleOpenProject}
+        />
+      )}
+      {mode === 'project' && (
+        <div className="flex-1 flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-1.5 border-b theme-border theme-bg-secondary shrink-0">
+            <button
+              onClick={handleBackTotaipa}
+              className="text-xs theme-hover px-2 py-1 rounded flex items-center gap-1"
+            >
+              ← Back to Library
+            </button>
+            <span className="text-[10px] text-gray-500">|</span>
+            <span className="text-xs text-gray-400 truncate">{projectPath}</span>
+          </div>
+          <div className="flex-1 min-h-0">
+            <ProjectShell initialPath={projectPath} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

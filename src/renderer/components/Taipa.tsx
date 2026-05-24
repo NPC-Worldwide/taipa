@@ -101,9 +101,10 @@ interface BookCollection {
     docPaths: string[];
 }
 
-interface GrimoireProps {
+interface TaipaProps {
     currentPath: string;
     onOpenDocument: (path: string, type: string) => void;
+    onOpenProject?: (path: string) => void;
     onClose?: () => void;
 }
 
@@ -151,12 +152,12 @@ const countWords = (text: string): number => {
 
 // ─── Component ───
 
-const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
+const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProject }) => {
     // ─── Mode ───
     const [activeMode, setActiveMode] = useState<'browse' | 'write' | 'collections' | 'reading'>(() =>
-        (localStorage.getItem('grimoire_mode') as any) || 'browse'
+        (localStorage.getItem('taipa_mode') as any) || 'browse'
     );
-    useEffect(() => { localStorage.setItem('grimoire_mode', activeMode); }, [activeMode]);
+    useEffect(() => { localStorage.setItem('taipa_mode', activeMode); }, [activeMode]);
 
     // ─── Browse state ───
     const [documents, setDocuments] = useState<Document[]>([]);
@@ -167,7 +168,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
     const [sortAsc, setSortAsc] = useState(true);
     const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
     const [favorites, setFavorites] = useState<Set<string>>(() => {
-        const saved = localStorage.getItem('grimoire_favorites');
+        const saved = localStorage.getItem('taipa_favorites');
         return saved ? new Set(JSON.parse(saved)) : new Set();
     });
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -175,7 +176,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
 
     // ─── Writing state ───
     const [projects, setProjects] = useState<WritingProject[]>(() => {
-        const saved = localStorage.getItem('grimoire_projects');
+        const saved = localStorage.getItem('taipa_projects');
         return saved ? JSON.parse(saved) : [];
     });
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -192,7 +193,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
 
     // ─── Collections state ───
     const [collections, setCollections] = useState<BookCollection[]>(() => {
-        const saved = localStorage.getItem('grimoire_collections');
+        const saved = localStorage.getItem('taipa_collections');
         return saved ? JSON.parse(saved) : [];
     });
     const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
@@ -201,33 +202,33 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
 
     // ─── Reading state ───
     const [annotations, setAnnotations] = useState<BookAnnotation[]>(() => {
-        const saved = localStorage.getItem('grimoire_annotations');
+        const saved = localStorage.getItem('taipa_annotations');
         return saved ? JSON.parse(saved) : [];
     });
     const [readingProgress, setReadingProgress] = useState<ReadingProgress[]>(() => {
-        const saved = localStorage.getItem('grimoire_reading_progress');
+        const saved = localStorage.getItem('taipa_reading_progress');
         return saved ? JSON.parse(saved) : [];
     });
 
     // ─── Persistence ───
     const saveProjects = useCallback((p: WritingProject[]) => {
         setProjects(p);
-        localStorage.setItem('grimoire_projects', JSON.stringify(p));
+        localStorage.setItem('taipa_projects', JSON.stringify(p));
     }, []);
 
     const saveCollections = useCallback((c: BookCollection[]) => {
         setCollections(c);
-        localStorage.setItem('grimoire_collections', JSON.stringify(c));
+        localStorage.setItem('taipa_collections', JSON.stringify(c));
     }, []);
 
     const saveAnnotations = useCallback((a: BookAnnotation[]) => {
         setAnnotations(a);
-        localStorage.setItem('grimoire_annotations', JSON.stringify(a));
+        localStorage.setItem('taipa_annotations', JSON.stringify(a));
     }, []);
 
     const saveFavorites = useCallback((favs: Set<string>) => {
         setFavorites(favs);
-        localStorage.setItem('grimoire_favorites', JSON.stringify([...favs]));
+        localStorage.setItem('taipa_favorites', JSON.stringify([...favs]));
     }, []);
 
     // ─── Browse logic ───
@@ -465,7 +466,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
     const importProject = useCallback(async () => {
         const result = await window.api?.showOpenDialog?.({
             title: 'Import Project',
-            filters: [{ name: 'Grimoire/JSON Project', extensions: ['json'] }],
+            filters: [{ name: 'taipa/JSON Project', extensions: ['json'] }],
             properties: ['openFile'],
         });
         if (result?.filePaths?.[0]) {
@@ -532,6 +533,9 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
                 </button>
                 <button onClick={loadDocuments} className="p-1.5 rounded theme-hover">
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                </button>
+                <button onClick={async () => { const result = await window.api?.showOpenDialog?.({ properties: ["openDirectory"], title: "Open Writing Project" }); if (result?.filePaths?.[0]) onOpenProject?.(result.filePaths[0]); }} className="p-1.5 rounded theme-hover" title="Open Project Folder">
+                    <FolderOpen size={16} />
                 </button>
 
                 <div className="flex-1 relative min-w-[120px]">
@@ -1221,7 +1225,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
             {/* Top nav */}
             <div className="flex items-center gap-1 px-2 py-1.5 border-b theme-border theme-bg-secondary shrink-0">
                 <BookOpen size={18} className="text-indigo-400 mr-1" />
-                <span className="text-sm font-bold text-indigo-400 mr-3">Grimoire</span>
+                <span className="text-sm font-bold text-indigo-400 mr-3">taipa</span>
                 {([
                     { id: 'browse' as const, icon: Search, label: 'Browse' },
                     { id: 'write' as const, icon: PenTool, label: 'Write' },
@@ -1251,4 +1255,4 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
     );
 };
 
-export default Grimoire;
+export default Taipa;
