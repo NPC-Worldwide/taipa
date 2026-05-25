@@ -564,13 +564,12 @@ A new plain text project.`);
             await window.api?.ensureDir?.(`${projectDir}/.taipa`);
             await window.api?.writeFileContent?.(`${projectDir}/.taipa/project.json`, JSON.stringify(manifest, null, 2));
 
-            onOpenProject?.(projectDir);
+            const existing = JSON.parse(localStorage.getItem('taipa_fs_projects') || '[]');
+            const updatedFs = [...existing.filter((p: any) => p.path !== projectDir), { path: projectDir, name: fsProjectName.trim(), type: fsProjectType, createdAt: new Date().toISOString() }];
+            localStorage.setItem('taipa_fs_projects', JSON.stringify(updatedFs));
+            setRecentFsProjects(updatedFs);
 
-            setRecentFsProjects(prev => {
-                const updated = [...prev, { path: projectDir, name: fsProjectName.trim(), type: fsProjectType, createdAt: new Date().toISOString() }];
-                localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
-                return updated;
-            });
+            onOpenProject?.(projectDir);
 
             setShowFilesystemProject(false);
             setFsProjectName('');
@@ -801,11 +800,9 @@ A new plain text project.`);
                                             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setRecentFsProjects(prev => {
-                                                        const updated = prev.filter(p => p.path !== proj.path);
-                                                        localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
-                                                        return updated;
-                                                    });
+                                                    const updated = recentFsProjects.filter(p => p.path !== proj.path);
+                                                    localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
+                                                    setRecentFsProjects(updated);
                                                 }}
                                                     className="p-1.5 bg-red-600/80 rounded hover:bg-red-600" title="Remove from list">
                                                     <X size={12} />
