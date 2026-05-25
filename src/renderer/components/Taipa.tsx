@@ -12,6 +12,7 @@ import {
 import {
     NovelEditor, ScreenplayEditor, PoetryEditor, JournalEditor, MangaEditor
 } from 'npcts';
+import { ProjectManifest, ProjectType } from '../types/project';
 
 // ─── Types ───
 
@@ -182,6 +183,10 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
     const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
     // (filesystem-only projects)
+    const [showNewProject, setShowNewProject] = useState(false);
+    const [newProjectTitle, setNewProjectTitle] = useState('');
+    const [newProjectType, setNewProjectType] = useState<'novel' | 'story' | 'screenplay' | 'poetry' | 'journal' | 'manga'>('novel');
+
     const [showFilesystemProject, setShowFilesystemProject] = useState(false);
     const [fsProjectName, setFsProjectName] = useState('');
     const [fsProjectType, setFsProjectType] = useState<'markdown_fiction' | 'latex_book' | 'plain_text' | 'docx_fiction'>('markdown_fiction');
@@ -191,6 +196,10 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
     const [writeView, setWriteView] = useState<'chapter' | 'outline' | 'characters' | 'notes'>('chapter');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showProjectSettings, setShowProjectSettings] = useState(false);
+    const [recentFsProjects, setRecentFsProjects] = useState<{ path: string; name: string; type: string; createdAt: string }[]>(() => {
+        const saved = localStorage.getItem('taipa_fs_projects');
+        return saved ? JSON.parse(saved) : [];
+    });
     const editorRef = useRef<HTMLTextAreaElement>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -502,37 +511,66 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
         if (!fsProjectName.trim() || !fsProjectPath) return;
         setFsCreating(true);
         try {
-            const dir = await window.api?.createDirectory?.(`${fsProjectPath}/${fsProjectName}`);
-            if (!dir) throw new Error('Failed to create directory');
+            const projectDir = `${fsProjectPath}/${fsProjectName}`;
+            const result = await window.api?.ensureDir?.(projectDir);
+            if (!result || result.error) throw new Error(result?.error || 'Failed to create directory');
 
-            const manifest: any = {
+            const manifestType: ProjectType = fsProjectType === 'markdown_fiction' ? 'plain_text'
+                : fsProjectType === 'docx_fiction' ? 'mixed'
+                : fsProjectType;
+
+            const manifest: ProjectManifest = {
+                version: '1.0.0',
                 name: fsProjectName.trim(),
-                type: fsProjectType,
-                createdAt: new Date().toISOString(),
+                type: manifestType,
+                chapters: [],
                 updatedAt: new Date().toISOString(),
             };
 
             if (fsProjectType === 'latex_book') {
-                manifest.files = ['main.tex', 'preamble.tex'];
-                await window.api?.writeFileContent?.(`${dir}/main.tex`, ['\\documentclass{book}', '\\input{preamble}', '\\begin{document}', '\\maketitle}', '\\chapter{Chapter One}', '\\end{document}'].join("\n"));
-                await window.api?.writeFileContent?.(`${dir}/preamble.tex`, ["\\usepackage[utf8]{inputenc}", "\\usepackage{amsmath}"].join("\n"));
+                await window.api?.writeFileContent?.(`${projectDir}/main.tex`, ['\\documentclass{book}', '\\input{preamble}', '\\begin{document}', '\\maketitle', '\\chapter{Chapter One}', '\\end{document}'].join("\n"));
+                await window.api?.writeFileContent?.(`${projectDir}/preamble.tex`, ["\\usepackage[utf8]{inputenc}", "\\usepackage{amsmath}"].join("\n"));
+                manifest.rootDocument = 'main.tex';
+                manifest.chapters = [
+                    { id: 'ch-0', title: 'Main Document', file: 'main.tex', order: 0 },
+                ];
+                manifest.compile = {
+                    engine: 'pdflatex',
+                    outputDir: 'build',
+                    runs: 2,
+                };
+                manifest.editorOverrides = { '*.tex': 'code', '*.bib': 'code' };
             } else if (fsProjectType === 'markdown_fiction') {
-                manifest.files = ['README.md'];
-                await window.api?.writeFileContent?.(`${dir}/README.md`, `# ${fsProjectName.trim()}
+                await window.api?.writeFileContent?.(`${projectDir}/README.md`, `# ${fsProjectName.trim()}
 
 A new Markdown fiction project.`);
+                manifest.chapters = [
+                    { id: 'ch-0', title: 'README', file: 'README.md', order: 0 },
+                ];
+                manifest.editorOverrides = { '*.md': 'code', '*.txt': 'code' };
             } else if (fsProjectType === 'plain_text') {
-                manifest.files = ['README.txt'];
-                await window.api?.writeFileContent?.(`${dir}/README.txt`, `${fsProjectName.trim()}
+                await window.api?.writeFileContent?.(`${projectDir}/README.txt`, `${fsProjectName.trim()}
 
 A new plain text project.`);
+                manifest.chapters = [
+                    { id: 'ch-0', title: 'README', file: 'README.txt', order: 0 },
+                ];
+                manifest.editorOverrides = { '*.txt': 'code', '*.md': 'code' };
             } else if (fsProjectType === 'docx_fiction') {
-                manifest.files = ['.gitkeep'];
-                await window.api?.writeFileContent?.(`${dir}/.gitkeep`, '');
+                await window.api?.writeFileContent?.(`${projectDir}/.gitkeep`, '');
+                manifest.chapters = [];
             }
 
-            await window.api?.createDirectory?.(`${dir}/.taipa`);
-            await window.api?.writeFileContent?.(`${dir}/.taipa/project.json`, JSON.stringify(manifest, null, 2));
+            await window.api?.ensureDir?.(`${projectDir}/.taipa`);
+            await window.api?.writeFileContent?.(`${projectDir}/.taipa/project.json`, JSON.stringify(manifest, null, 2));
+
+            onOpenProject?.(projectDir);
+
+            setRecentFsProjects(prev => {
+                const updated = [...prev, { path: projectDir, name: fsProjectName.trim(), type: fsProjectType, createdAt: new Date().toISOString() }];
+                localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
+                return updated;
+            });
 
             setShowFilesystemProject(false);
             setFsProjectName('');
@@ -544,7 +582,7 @@ A new plain text project.`);
         } finally {
             setFsCreating(false);
         }
-    }, [fsProjectName, fsProjectType, fsProjectPath]);
+    }, [fsProjectName, fsProjectType, fsProjectPath, onOpenProject]);
 
     // ─── Collections logic ───
     const createCollection = useCallback(() => {
@@ -710,7 +748,7 @@ A new plain text project.`);
                     </div>
 
                     <div className="flex-1 overflow-auto p-4">
-                        {projects.length === 0 ? (
+                        {projects.length === 0 && recentFsProjects.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-gray-500">
                                 <PenTool size={48} className="opacity-30 mb-4" />
                                 <p>No writing projects yet</p>
@@ -752,6 +790,35 @@ A new plain text project.`);
                                                 </div>
                                             )}
                                             <p className="text-[10px] text-gray-500 mt-1">{formatDate(proj.updatedAt)}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                                {recentFsProjects.map((proj, i) => (
+                                    <div key={proj.path}
+                                        onClick={() => onOpenProject?.(proj.path)}
+                                        className="group relative cursor-pointer rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition-all">
+                                        <div className={`h-48 bg-gradient-to-b ${COVER_COLORS[i % COVER_COLORS.length]} p-4 flex flex-col justify-end`}>
+                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setRecentFsProjects(prev => {
+                                                        const updated = prev.filter(p => p.path !== proj.path);
+                                                        localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
+                                                        return updated;
+                                                    });
+                                                }}
+                                                    className="p-1.5 bg-red-600/80 rounded hover:bg-red-600" title="Remove from list">
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                            <div className="text-[10px] uppercase tracking-wide text-white/60 mb-1">{proj.type}</div>
+                                            <h3 className="font-bold text-white text-lg leading-tight">{proj.name}</h3>
+                                        </div>
+                                        <div className="p-3 theme-bg-secondary">
+                                            <div className="flex items-center justify-between text-[10px] text-gray-400">
+                                                <span className="truncate">{proj.path}</span>
+                                            </div>
+                                            <p className="text-[10px] text-gray-500 mt-1">{formatDate(proj.createdAt)}</p>
                                         </div>
                                     </div>
                                 ))}
