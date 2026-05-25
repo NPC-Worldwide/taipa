@@ -55,7 +55,8 @@ export function useProject() {
       // If no manifest, detect from directory
       if (!manifest) {
         const items = await window.api?.readDirectory?.(rootPath);
-        if (!items) {
+        if (!items || !Array.isArray(items)) {
+          console.warn('Could not read directory or invalid result:', items);
           setLoading(false);
           return;
         }
@@ -67,6 +68,7 @@ export function useProject() {
       }
 
       if (!manifest) {
+        console.warn('Could not detect project at:', rootPath);
         setLoading(false);
         return;
       }
@@ -83,6 +85,8 @@ export function useProject() {
 
       setOpenFiles([]);
       setActiveFilePath(null);
+    } catch (err) {
+      console.error('Failed to open project:', err);
     } finally {
       setLoading(false);
     }
