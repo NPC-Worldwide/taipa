@@ -13,6 +13,8 @@ import {
     NovelEditor, ScreenplayEditor, PoetryEditor, JournalEditor, MangaEditor
 } from 'npcts';
 import { ProjectManifest, ProjectType } from '../types/project';
+import { readManifest, writeManifest } from '../lib/manifest';
+import { detectProject } from '../lib/projectDetect';
 
 // ─── Types ───
 
@@ -497,6 +499,51 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
         }
     }, [projects, saveProjects]);
 
+    const openExistingProjectFolder = useCallback(async () => {
+        const result = await window.api?.showOpenDialog?.({
+            title: 'Open Existing Project Folder',
+            properties: ['openDirectory'],
+        });
+        if (!result?.filePaths?.[0]) return;
+        const dirPath = result.filePaths[0];
+
+        try {
+            let manifest = await readManifest(dirPath);
+
+            if (!manifest) {
+                const items = await window.api?.readDirectory?.(dirPath);
+                if (!items || !Array.isArray(items)) {
+                    alert('Could not read folder contents.');
+                    return;
+                }
+                const detected = await detectProject(dirPath, items);
+                if (detected) {
+                    manifest = detected.manifest as ProjectManifest;
+                    await writeManifest(dirPath, manifest);
+                }
+            }
+
+            if (!manifest) {
+                alert('Could not detect project type from folder contents.');
+                return;
+            }
+
+            const updated = [...recentFsProjects.filter(p => p.path !== dirPath), {
+                path: dirPath,
+                name: manifest.name || dirPath.split('/').pop() || 'Untitled',
+                type: manifest.type,
+                createdAt: new Date().toISOString(),
+            }];
+            localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
+            setRecentFsProjects(updated);
+
+            onOpenProject?.(dirPath);
+        } catch (e) {
+            console.error('Open existing project failed:', e);
+            alert('Failed to open folder: ' + (e as Error).message);
+        }
+    }, [recentFsProjects, setRecentFsProjects, onOpenProject]);
+
     const selectProjectFolder = useCallback(async () => {
         const result = await window.api?.showOpenDialog?.({
             title: 'Select Parent Folder',
@@ -741,6 +788,9 @@ A new plain text project.`);
                         <button onClick={importProject} className="px-3 py-1.5 text-xs theme-bg-tertiary theme-hover rounded flex items-center gap-1">
                             <Upload size={12} /> Import
                         </button>
+                        <button onClick={openExistingProjectFolder} className="px-3 py-1.5 text-xs theme-bg-tertiary theme-hover rounded flex items-center gap-1">
+                            <Folder size={12} /> Open Folder
+                        </button>
                         <button onClick={() => setShowFilesystemProject(true)} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-1">
                             <FolderOpen size={12} /> New Project
                         </button>
@@ -752,10 +802,16 @@ A new plain text project.`);
                                 <PenTool size={48} className="opacity-30 mb-4" />
                                 <p>No writing projects yet</p>
                                 <p className="text-xs mt-2">Create a Markdown, LaTeX, Plain Text, or DOCX project</p>
-                                <button onClick={() => setShowFilesystemProject(true)}
-                                    className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
-                                    Create Your First Project
-                                </button>
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={() => setShowFilesystemProject(true)}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
+                                        Create Your First Project
+                                    </button>
+                                    <button onClick={openExistingProjectFolder}
+                                        className="px-4 py-2 theme-bg-tertiary theme-hover rounded text-sm">
+                                        Open Existing Folder
+                                    </button>
+                                </div>
                             </div>
                         ) : (
                             <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
