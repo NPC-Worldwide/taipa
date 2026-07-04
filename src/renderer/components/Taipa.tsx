@@ -12,9 +12,6 @@ import {
 import {
     NovelEditor, ScreenplayEditor, PoetryEditor, JournalEditor, MangaEditor
 } from 'npcts';
-import { ProjectManifest, ProjectType } from '../types/project';
-import { readManifest, writeManifest } from '../lib/manifest';
-import { detectProject } from '../lib/projectDetect';
 
 // ─── Types ───
 
@@ -104,10 +101,9 @@ interface BookCollection {
     docPaths: string[];
 }
 
-interface TaipaProps {
+interface GrimoireProps {
     currentPath: string;
     onOpenDocument: (path: string, type: string) => void;
-    onOpenProject?: (path: string) => void;
     onClose?: () => void;
 }
 
@@ -155,12 +151,12 @@ const countWords = (text: string): number => {
 
 // ─── Component ───
 
-const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProject }) => {
+const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
     // ─── Mode ───
     const [activeMode, setActiveMode] = useState<'browse' | 'write' | 'collections' | 'reading'>(() =>
-        (localStorage.getItem('taipa_mode') as any) || 'browse'
+        (localStorage.getItem('grimoire_mode') as any) || 'browse'
     );
-    useEffect(() => { localStorage.setItem('taipa_mode', activeMode); }, [activeMode]);
+    useEffect(() => { localStorage.setItem('grimoire_mode', activeMode); }, [activeMode]);
 
     // ─── Browse state ───
     const [documents, setDocuments] = useState<Document[]>([]);
@@ -171,7 +167,7 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
     const [sortAsc, setSortAsc] = useState(true);
     const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
     const [favorites, setFavorites] = useState<Set<string>>(() => {
-        const saved = localStorage.getItem('taipa_favorites');
+        const saved = localStorage.getItem('grimoire_favorites');
         return saved ? new Set(JSON.parse(saved)) : new Set();
     });
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -179,35 +175,24 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
 
     // ─── Writing state ───
     const [projects, setProjects] = useState<WritingProject[]>(() => {
-        const saved = localStorage.getItem('taipa_projects');
+        const saved = localStorage.getItem('grimoire_projects');
         return saved ? JSON.parse(saved) : [];
     });
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
     const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
-    // (filesystem-only projects)
     const [showNewProject, setShowNewProject] = useState(false);
     const [newProjectTitle, setNewProjectTitle] = useState('');
-    const [newProjectType, setNewProjectType] = useState<'novel' | 'story' | 'screenplay' | 'poetry' | 'journal' | 'manga'>('novel');
-
-    const [showFilesystemProject, setShowFilesystemProject] = useState(false);
-    const [fsProjectName, setFsProjectName] = useState('');
-    const [fsProjectType, setFsProjectType] = useState<'markdown_fiction' | 'latex_book' | 'plain_text' | 'docx_fiction'>('markdown_fiction');
-    const [fsProjectPath, setFsProjectPath] = useState('');
-    const [fsCreating, setFsCreating] = useState(false);
+    const [newProjectType, setNewProjectType] = useState<WritingProject['type']>('novel');
     const [writeSidebarOpen, setWriteSidebarOpen] = useState(true);
     const [writeView, setWriteView] = useState<'chapter' | 'outline' | 'characters' | 'notes'>('chapter');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showProjectSettings, setShowProjectSettings] = useState(false);
-    const [recentFsProjects, setRecentFsProjects] = useState<{ path: string; name: string; type: string; createdAt: string }[]>(() => {
-        const saved = localStorage.getItem('taipa_fs_projects');
-        return saved ? JSON.parse(saved) : [];
-    });
     const editorRef = useRef<HTMLTextAreaElement>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // ─── Collections state ───
     const [collections, setCollections] = useState<BookCollection[]>(() => {
-        const saved = localStorage.getItem('taipa_collections');
+        const saved = localStorage.getItem('grimoire_collections');
         return saved ? JSON.parse(saved) : [];
     });
     const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
@@ -216,33 +201,33 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
 
     // ─── Reading state ───
     const [annotations, setAnnotations] = useState<BookAnnotation[]>(() => {
-        const saved = localStorage.getItem('taipa_annotations');
+        const saved = localStorage.getItem('grimoire_annotations');
         return saved ? JSON.parse(saved) : [];
     });
     const [readingProgress, setReadingProgress] = useState<ReadingProgress[]>(() => {
-        const saved = localStorage.getItem('taipa_reading_progress');
+        const saved = localStorage.getItem('grimoire_reading_progress');
         return saved ? JSON.parse(saved) : [];
     });
 
     // ─── Persistence ───
     const saveProjects = useCallback((p: WritingProject[]) => {
         setProjects(p);
-        localStorage.setItem('taipa_projects', JSON.stringify(p));
+        localStorage.setItem('grimoire_projects', JSON.stringify(p));
     }, []);
 
     const saveCollections = useCallback((c: BookCollection[]) => {
         setCollections(c);
-        localStorage.setItem('taipa_collections', JSON.stringify(c));
+        localStorage.setItem('grimoire_collections', JSON.stringify(c));
     }, []);
 
     const saveAnnotations = useCallback((a: BookAnnotation[]) => {
         setAnnotations(a);
-        localStorage.setItem('taipa_annotations', JSON.stringify(a));
+        localStorage.setItem('grimoire_annotations', JSON.stringify(a));
     }, []);
 
     const saveFavorites = useCallback((favs: Set<string>) => {
         setFavorites(favs);
-        localStorage.setItem('taipa_favorites', JSON.stringify([...favs]));
+        localStorage.setItem('grimoire_favorites', JSON.stringify([...favs]));
     }, []);
 
     // ─── Browse logic ───
@@ -480,7 +465,7 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
     const importProject = useCallback(async () => {
         const result = await window.api?.showOpenDialog?.({
             title: 'Import Project',
-            filters: [{ name: 'taipa/JSON Project', extensions: ['json'] }],
+            filters: [{ name: 'Grimoire/JSON Project', extensions: ['json'] }],
             properties: ['openFile'],
         });
         if (result?.filePaths?.[0]) {
@@ -498,137 +483,6 @@ const Taipa: React.FC<TaipaProps> = ({ currentPath, onOpenDocument, onOpenProjec
             }
         }
     }, [projects, saveProjects]);
-
-    const openExistingProjectFolder = useCallback(async () => {
-        const result = await window.api?.showOpenDialog?.({
-            title: 'Open Existing Project Folder',
-            properties: ['openDirectory'],
-        });
-        if (!result?.filePaths?.[0]) return;
-        const dirPath = result.filePaths[0];
-
-        try {
-            let manifest = await readManifest(dirPath);
-
-            if (!manifest) {
-                const items = await window.api?.readDirectory?.(dirPath);
-                if (!items || !Array.isArray(items)) {
-                    alert('Could not read folder contents.');
-                    return;
-                }
-                const detected = await detectProject(dirPath, items);
-                if (detected) {
-                    manifest = detected.manifest as ProjectManifest;
-                    await writeManifest(dirPath, manifest);
-                }
-            }
-
-            if (!manifest) {
-                alert('Could not detect project type from folder contents.');
-                return;
-            }
-
-            const updated = [...recentFsProjects.filter(p => p.path !== dirPath), {
-                path: dirPath,
-                name: manifest.name || dirPath.split('/').pop() || 'Untitled',
-                type: manifest.type,
-                createdAt: new Date().toISOString(),
-            }];
-            localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
-            setRecentFsProjects(updated);
-
-            onOpenProject?.(dirPath);
-        } catch (e) {
-            console.error('Open existing project failed:', e);
-            alert('Failed to open folder: ' + (e as Error).message);
-        }
-    }, [recentFsProjects, setRecentFsProjects, onOpenProject]);
-
-    const selectProjectFolder = useCallback(async () => {
-        const result = await window.api?.showOpenDialog?.({
-            title: 'Select Parent Folder',
-            properties: ['openDirectory'],
-        });
-        if (result?.filePaths?.[0]) {
-            setFsProjectPath(result.filePaths[0]);
-        }
-    }, []);
-
-    const createFilesystemProject = useCallback(async () => {
-        if (!fsProjectName.trim() || !fsProjectPath) return;
-        setFsCreating(true);
-        try {
-            const projectDir = `${fsProjectPath}/${fsProjectName}`;
-            const result = await window.api?.ensureDir?.(projectDir);
-            if (!result || result.error) throw new Error(result?.error || 'Failed to create directory');
-
-            const manifestType: ProjectType = fsProjectType === 'markdown_fiction' ? 'plain_text'
-                : fsProjectType === 'docx_fiction' ? 'mixed'
-                : fsProjectType;
-
-            const manifest: ProjectManifest = {
-                version: '1.0.0',
-                name: fsProjectName.trim(),
-                type: manifestType,
-                chapters: [],
-                updatedAt: new Date().toISOString(),
-            };
-
-            if (fsProjectType === 'latex_book') {
-                await window.api?.writeFileContent?.(`${projectDir}/main.tex`, ['\\documentclass{book}', '\\input{preamble}', '\\begin{document}', '\\maketitle', '\\chapter{Chapter One}', '\\end{document}'].join("\n"));
-                await window.api?.writeFileContent?.(`${projectDir}/preamble.tex`, ["\\usepackage[utf8]{inputenc}", "\\usepackage{amsmath}"].join("\n"));
-                manifest.rootDocument = 'main.tex';
-                manifest.chapters = [
-                    { id: 'ch-0', title: 'Main Document', file: 'main.tex', order: 0 },
-                ];
-                manifest.compile = {
-                    engine: 'pdflatex',
-                    outputDir: 'build',
-                    runs: 2,
-                };
-                manifest.editorOverrides = { '*.tex': 'code', '*.bib': 'code' };
-            } else if (fsProjectType === 'markdown_fiction') {
-                await window.api?.writeFileContent?.(`${projectDir}/README.md`, `# ${fsProjectName.trim()}
-
-A new Markdown fiction project.`);
-                manifest.chapters = [
-                    { id: 'ch-0', title: 'README', file: 'README.md', order: 0 },
-                ];
-                manifest.editorOverrides = { '*.md': 'code', '*.txt': 'code' };
-            } else if (fsProjectType === 'plain_text') {
-                await window.api?.writeFileContent?.(`${projectDir}/README.txt`, `${fsProjectName.trim()}
-
-A new plain text project.`);
-                manifest.chapters = [
-                    { id: 'ch-0', title: 'README', file: 'README.txt', order: 0 },
-                ];
-                manifest.editorOverrides = { '*.txt': 'code', '*.md': 'code' };
-            } else if (fsProjectType === 'docx_fiction') {
-                await window.api?.writeFileContent?.(`${projectDir}/.gitkeep`, '');
-                manifest.chapters = [];
-            }
-
-            await window.api?.ensureDir?.(`${projectDir}/.taipa`);
-            await window.api?.writeFileContent?.(`${projectDir}/.taipa/project.json`, JSON.stringify(manifest, null, 2));
-
-            const existing = JSON.parse(localStorage.getItem('taipa_fs_projects') || '[]');
-            const updatedFs = [...existing.filter((p: any) => p.path !== projectDir), { path: projectDir, name: fsProjectName.trim(), type: fsProjectType, createdAt: new Date().toISOString() }];
-            localStorage.setItem('taipa_fs_projects', JSON.stringify(updatedFs));
-            setRecentFsProjects(updatedFs);
-
-            onOpenProject?.(projectDir);
-
-            setShowFilesystemProject(false);
-            setFsProjectName('');
-            setFsProjectPath('');
-            setFsProjectType('markdown_fiction');
-        } catch (e) {
-            console.error('Filesystem project creation failed:', e);
-            alert('Failed to create project: ' + (e as Error).message);
-        } finally {
-            setFsCreating(false);
-        }
-    }, [fsProjectName, fsProjectType, fsProjectPath, onOpenProject]);
 
     // ─── Collections logic ───
     const createCollection = useCallback(() => {
@@ -678,9 +532,6 @@ A new plain text project.`);
                 </button>
                 <button onClick={loadDocuments} className="p-1.5 rounded theme-hover">
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                </button>
-                <button onClick={async () => { const result = await window.api?.showOpenDialog?.({ properties: ["openDirectory"], title: "Open Writing Project" }); if (result?.filePaths?.[0]) onOpenProject?.(result.filePaths[0]); }} className="p-1.5 rounded theme-hover" title="Open Project Folder">
-                    <FolderOpen size={16} />
                 </button>
 
                 <div className="flex-1 relative min-w-[120px]">
@@ -788,30 +639,21 @@ A new plain text project.`);
                         <button onClick={importProject} className="px-3 py-1.5 text-xs theme-bg-tertiary theme-hover rounded flex items-center gap-1">
                             <Upload size={12} /> Import
                         </button>
-                        <button onClick={openExistingProjectFolder} className="px-3 py-1.5 text-xs theme-bg-tertiary theme-hover rounded flex items-center gap-1">
-                            <Folder size={12} /> Open Folder
-                        </button>
-                        <button onClick={() => setShowFilesystemProject(true)} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-1">
-                            <FolderOpen size={12} /> New Project
+                        <button onClick={() => setShowNewProject(true)} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-1">
+                            <Plus size={12} /> New Project
                         </button>
                     </div>
 
                     <div className="flex-1 overflow-auto p-4">
-                        {projects.length === 0 && recentFsProjects.length === 0 ? (
+                        {projects.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-gray-500">
                                 <PenTool size={48} className="opacity-30 mb-4" />
                                 <p>No writing projects yet</p>
-                                <p className="text-xs mt-2">Create a Markdown, LaTeX, Plain Text, or DOCX project</p>
-                                <div className="flex gap-2 mt-4">
-                                    <button onClick={() => setShowFilesystemProject(true)}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
-                                        Create Your First Project
-                                    </button>
-                                    <button onClick={openExistingProjectFolder}
-                                        className="px-4 py-2 theme-bg-tertiary theme-hover rounded text-sm">
-                                        Open Existing Folder
-                                    </button>
-                                </div>
+                                <p className="text-xs mt-2">Create a novel, story, screenplay, or journal</p>
+                                <button onClick={() => setShowNewProject(true)}
+                                    className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
+                                    Create Your First Project
+                                </button>
                             </div>
                         ) : (
                             <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
@@ -848,95 +690,34 @@ A new plain text project.`);
                                         </div>
                                     </div>
                                 ))}
-                                {recentFsProjects.map((proj, i) => (
-                                    <div key={proj.path}
-                                        onClick={() => onOpenProject?.(proj.path)}
-                                        className="group relative cursor-pointer rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition-all">
-                                        <div className={`h-48 bg-gradient-to-b ${COVER_COLORS[i % COVER_COLORS.length]} p-4 flex flex-col justify-end`}>
-                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    const updated = recentFsProjects.filter(p => p.path !== proj.path);
-                                                    localStorage.setItem('taipa_fs_projects', JSON.stringify(updated));
-                                                    setRecentFsProjects(updated);
-                                                }}
-                                                    className="p-1.5 bg-red-600/80 rounded hover:bg-red-600" title="Remove from list">
-                                                    <X size={12} />
-                                                </button>
-                                            </div>
-                                            <div className="text-[10px] uppercase tracking-wide text-white/60 mb-1">{proj.type}</div>
-                                            <h3 className="font-bold text-white text-lg leading-tight">{proj.name}</h3>
-                                        </div>
-                                        <div className="p-3 theme-bg-secondary">
-                                            <div className="flex items-center justify-between text-[10px] text-gray-400">
-                                                <span className="truncate">{proj.path}</span>
-                                            </div>
-                                            <p className="text-[10px] text-gray-500 mt-1">{formatDate(proj.createdAt)}</p>
-                                        </div>
-                                    </div>
-                                ))}
                             </div>
                         )}
                     </div>
 
-
-                    {showFilesystemProject && (
-                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => !fsCreating && setShowFilesystemProject(false)}>
-                            <div className="theme-bg-secondary rounded-xl shadow-2xl p-6 w-[480px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-                                <h3 className="text-lg font-bold mb-4">New Folder Project</h3>
-                                <p className="text-xs text-gray-400 mb-4">Creates a real folder with a <code>.taipa/project.json</code> manifest.</p>
+                    {showNewProject && (
+                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setShowNewProject(false)}>
+                            <div className="theme-bg-secondary rounded-xl shadow-2xl p-6 w-[420px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+                                <h3 className="text-lg font-bold mb-4">New Writing Project</h3>
                                 <div className="space-y-3">
+                                    <input type="text" value={newProjectTitle} onChange={(e) => setNewProjectTitle(e.target.value)}
+                                        placeholder="Project title..." autoFocus
+                                        onKeyDown={(e) => { if (e.key === 'Enter') createProject(); }}
+                                        className="w-full px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                                     <div>
-                                        <label className="text-xs text-gray-400 mb-1 block">Project Name</label>
-                                        <input type="text" value={fsProjectName} onChange={(e) => setFsProjectName(e.target.value)}
-                                            placeholder="e.g. My Novel"
-                                            className="w-full px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs text-gray-400 mb-1 block">Project Type</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {([
-                                                { id: 'markdown_fiction' as const, label: 'Markdown Fiction', desc: '.md files' },
-                                                { id: 'latex_book' as const, label: 'LaTeX Book', desc: '.tex + compile' },
-                                                { id: 'plain_text' as const, label: 'Plain Text', desc: '.txt files' },
-                                                { id: 'docx_fiction' as const, label: 'DOCX Fiction', desc: '.docx folder' },
-                                            ]).map(t => (
-                                                <button key={t.id} onClick={() => setFsProjectType(t.id)}
-                                                    className={`px-3 py-2 rounded text-xs text-left border ${fsProjectType === t.id ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' : 'theme-bg-tertiary theme-hover border-transparent'}`}>
-                                                    <div className="font-medium">{t.label}</div>
-                                                    <div className="text-[10px] text-gray-500 mt-0.5">{t.desc}</div>
+                                        <label className="text-xs text-gray-400 mb-1 block">Type</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {(['novel', 'story', 'manga', 'screenplay', 'poetry', 'journal'] as const).map(t => (
+                                                <button key={t} onClick={() => setNewProjectType(t)}
+                                                    className={`px-3 py-2 rounded text-xs capitalize ${newProjectType === t ? 'bg-indigo-600 text-white' : 'theme-bg-tertiary theme-hover'}`}>
+                                                    {t}
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
-
-                                    <div>
-                                        <label className="text-xs text-gray-400 mb-1 block">Parent Folder</label>
-                                        <div className="flex gap-2">
-                                            <input type="text" value={fsProjectPath}
-                                                readOnly
-                                                placeholder="Click Browse to choose..."
-                                                className="flex-1 px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm text-gray-400" />
-                                            <button onClick={selectProjectFolder}
-                                                className="px-3 py-2 theme-bg-tertiary theme-hover border theme-border rounded text-xs flex items-center gap-1 shrink-0">
-                                                <FolderOpen size={12} /> Browse
-                                            </button>
-                                        </div>
-                                    </div>
-
                                     <div className="flex gap-2 justify-end pt-2">
-                                        <button onClick={() => setShowFilesystemProject(false)} disabled={fsCreating}
-                                            className="px-4 py-2 theme-bg-tertiary rounded text-sm disabled:opacity-50">Cancel</button>
-                                        <button onClick={createFilesystemProject}
-                                            disabled={!fsProjectName.trim() || !fsProjectPath || fsCreating}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded text-sm flex items-center gap-1">
-                                            {fsCreating ? (
-                                                <><RefreshCw size={12} className="animate-spin" /> Creating...</>
-                                            ) : (
-                                                <><Plus size={12} /> Create Project</>
-                                            )}
-                                        </button>
+                                        <button onClick={() => setShowNewProject(false)} className="px-4 py-2 theme-bg-tertiary rounded text-sm">Cancel</button>
+                                        <button onClick={createProject} disabled={!newProjectTitle.trim()}
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded text-sm">Create</button>
                                     </div>
                                 </div>
                             </div>
@@ -1440,7 +1221,7 @@ A new plain text project.`);
             {/* Top nav */}
             <div className="flex items-center gap-1 px-2 py-1.5 border-b theme-border theme-bg-secondary shrink-0">
                 <BookOpen size={18} className="text-indigo-400 mr-1" />
-                <span className="text-sm font-bold text-indigo-400 mr-3">taipa</span>
+                <span className="text-sm font-bold text-indigo-400 mr-3">Taipa</span>
                 {([
                     { id: 'browse' as const, icon: Search, label: 'Browse' },
                     { id: 'write' as const, icon: PenTool, label: 'Write' },
@@ -1470,4 +1251,4 @@ A new plain text project.`);
     );
 };
 
-export default Taipa;
+export default Grimoire;

@@ -22,9 +22,9 @@ function killBackendProcess() {
   if (!backendProcess) return;
   console.log('[Main] Killing backend process');
   if (process.platform === 'win32') {
-    try { require('child_process').execSync(`taskkill /F /T /PID ${backendProcess.pid ?? 0}`, { stdio: 'ignore' }); } catch {}
+    try { require('child_process').execSync(`taskkill /F /T /PID ${backendProcess.pid}`, { stdio: 'ignore' }); } catch {}
   } else {
-    try { process.kill(-(backendProcess.pid ?? 0), 'SIGTERM'); } catch {}
+    if (backendProcess.pid) { try { process.kill(-backendProcess.pid, 'SIGTERM'); } catch {} }
   }
   backendProcess = null;
 }
@@ -236,56 +236,5 @@ ipcMain.handle('proxy-fetch', async (_event, url, options = {}) => {
     return { ok: resp.ok, status: resp.status, data };
   } catch (err) {
     return { ok: false, status: 0, error: (err as Error).message };
-  }
-});
-
-ipcMain.handle('compile-latex', async (_, options: { projectPath: string; rootDocument: string; engine: string; outputDir: string; bibTool?: string }) => {
-  try {
-    const { projectPath, rootDocument, engine, outputDir, bibTool } = options;
-    const rootTex = path.join(projectPath, rootDocument);
-    const outDir = path.join(projectPath, outputDir);
-    await fs.promises.mkdir(outDir, { recursive: true });
-
-    // Run latex engine
-    const latexArgs = ['-output-directory', outDir, '-interaction=nonstopmode', rootTex];
-    const latex = spawn(engine, latexArgs, {
-      cwd: projectPath,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    latex.stdout.on('data', (d) => { stdout += d.toString(); });
-    latex.stderr.on('data', (d) => { stderr += d.toString(); });
-
-    const exitCode = await new Promise<number>((resolve) => {
-      latex.on('close', (code) => resolve(code ?? 1));
-    });
-
-    // Run bibtex/biber if requested
-    if (bibTool && exitCode === 0) {
-      const bibProcess = spawn(bibTool, [rootTex.replace(/\.tex$/, '')], {
-        cwd: outDir,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      await new Promise<void>((resolve) => bibProcess.on('close', () => resolve()));
-      // Re-run latex after bibtex
-      const reRun = spawn(engine, latexArgs, { cwd: projectPath, stdio: ['ignore', 'pipe', 'pipe'] });
-      await new Promise<void>((resolve) => reRun.on('close', () => resolve()));
-    }
-
-    // Determine output PDF path
-    const baseName = path.basename(rootDocument, '.tex');
-    const pdfPath = path.join(outDir, `${baseName}.pdf`);
-    const pdfExists = fs.existsSync(pdfPath);
-
-    return {
-      success: pdfExists,
-      exitCode,
-      pdfPath: pdfExists ? pdfPath : undefined,
-      log: stdout + '\n' + stderr,
-    };
-  } catch (err) {
-    return { success: false, exitCode: 1, log: (err as Error).message };
   }
 });
