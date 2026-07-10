@@ -5,6 +5,7 @@ import PdfViewer from './editors/PdfViewer';
 import LatexActionBar from './LatexActionBar';
 import GitPanel from './GitPanel';
 import BookReader from './BookReader';
+import WholeBookEditor from './WholeBookEditor';
 import {
   FolderOpen, ChevronRight, ChevronDown, FileText,
   Save, RefreshCw, BookOpen, PenTool, Folder, Hash,
@@ -369,6 +370,13 @@ const ProjectShell: React.FC<ProjectShellProps> = ({ initialPath }) => {
                 manifest={project.manifest}
                 readProjectFile={readProjectFile}
                 onSelectChapter={handleSelectFile}
+              />
+            ) : project.manifest.type === 'latex_book' ? (
+              <WholeBookEditor
+                projectPath={project.path}
+                manifest={project.manifest}
+                readProjectFile={readProjectFile}
+                focusRelativePath={activeFile?.relativePath}
               />
             ) : (
               <EditorSwitcher
