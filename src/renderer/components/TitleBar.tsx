@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Minus, Square, X, Maximize2 } from 'lucide-react';
+import UpdateChecker from './UpdateChecker';
 
 const TitleBar: React.FC = () => {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -40,10 +41,13 @@ const TitleBar: React.FC = () => {
   if (isMac) {
     return (
       <div
-        className="h-8 flex-shrink-0 flex items-center justify-center select-none"
+        className="h-8 flex-shrink-0 flex items-center justify-between select-none pl-20"
         style={{ WebkitAppRegion: 'drag' as any }}
       >
         <span className="text-xs font-medium text-gray-400">Taipa</span>
+        <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' as any }}>
+          <UpdateChecker />
+        </div>
       </div>
     );
   }
@@ -68,6 +72,7 @@ const TitleBar: React.FC = () => {
 
       {/* Right: window controls */}
       <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' as any }}>
+        <UpdateChecker />
         <button
           onClick={handleMinimize}
           className="w-12 h-9 flex items-center justify-center text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"

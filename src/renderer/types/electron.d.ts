@@ -30,6 +30,12 @@ export interface IElectronAPI {
   gitCommit: (params: { repoRoot: string; message: string }) => Promise<any>;
   gitPush: (params: { repoRoot: string }) => Promise<any>;
   gitPull: (params: { repoRoot: string }) => Promise<any>;
+  checkForUpdates: () => Promise<any>;
+  getAppVersion: () => Promise<string>;
+  downloadAndInstallUpdate: (opts: { releaseUrl: string }) => Promise<any>;
+  onUpdateDownloadProgress: (cb: (data: { progress: number; receivedBytes: number; totalBytes: number }) => void) => () => void;
+  openExternal: (url: string) => Promise<any>;
+  closeWindow: () => void;
 }
 
 declare global {

@@ -26,6 +26,12 @@ export interface IElectronAPI {
   gitCommit: (params: { repoRoot: string; message: string }) => Promise<any>;
   gitPush: (params: { repoRoot: string }) => Promise<any>;
   gitPull: (params: { repoRoot: string }) => Promise<any>;
+  checkForUpdates: () => Promise<any>;
+  getAppVersion: () => Promise<string>;
+  downloadAndInstallUpdate: (opts: { releaseUrl: string }) => Promise<any>;
+  onUpdateDownloadProgress: (cb: (data: { progress: number; receivedBytes: number; totalBytes: number }) => void) => () => void;
+  openExternal: (url: string) => Promise<any>;
+  closeWindow: () => void;
 }
 
 contextBridge.exposeInMainWorld('api', {
@@ -58,6 +64,16 @@ contextBridge.exposeInMainWorld('api', {
   gitCommit: (params: any) => ipcRenderer.invoke('git-commit', params),
   gitPush: (params: any) => ipcRenderer.invoke('git-push', params),
   gitPull: (params: any) => ipcRenderer.invoke('git-pull', params),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  downloadAndInstallUpdate: (opts: any) => ipcRenderer.invoke('download-and-install-update', opts),
+  onUpdateDownloadProgress: (cb: any) => {
+    const handler = (_event: IpcRendererEvent, data: any) => cb(data);
+    ipcRenderer.on('update-download-progress', handler);
+    return () => ipcRenderer.removeListener('update-download-progress', handler);
+  },
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+  closeWindow: () => ipcRenderer.send('window-close'),
 } as IElectronAPI);
 
 declare global {
