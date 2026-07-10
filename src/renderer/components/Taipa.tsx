@@ -343,9 +343,9 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpen
         setLoading(false);
     }, [currentPath, activeSource, scanDirectory]);
 
-    // Load documents when browse tab is active and deps change
+    // Document scanning is no longer tied to a top-level Browse tab; kept for compatibility.
     useEffect(() => {
-        if (activeMode === 'browse') loadDocuments();
+        // no-op: activeMode is now always 'projects'
     }, [activeMode, loadDocuments]);
 
     const toggleFavorite = useCallback((path: string) => {
@@ -567,68 +567,168 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpen
     }, [collections, saveCollections]);
 
     // ─── Render Projects ───
-    const renderProjects = () => (
-        <div className="flex-1 flex flex-col min-h-0 p-4 overflow-auto">
-            <div className="max-w-2xl mx-auto w-full">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold theme-text-primary">Projects</h2>
-                    <button
-                        onClick={handleOpenProject}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-xs flex items-center gap-1.5"
-                    >
-                        <FolderOpen size={12} />
-                        Open Project Folder
-                    </button>
-                </div>
+    const renderProjects = () => {
+        // When a writing project is active, show its workspace directly.
+        if (activeProjectId) {
+            return renderWrite();
+        }
 
-                {recentProjects.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                        <BookOpen size={48} className="opacity-30 mb-4" />
-                        <p className="text-sm mb-2">No projects opened yet.</p>
-                        <p className="text-xs text-gray-500 mb-4">Open a folder containing a LaTeX book, novel, or other writing project.</p>
-                        <button
-                            onClick={handleOpenProject}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm flex items-center gap-2"
-                        >
-                            <FolderOpen size={14} />
-                            Open Project Folder
-                        </button>
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold px-1">
-                            Recent
-                        </div>
-                        {recentProjects.map((p) => (
-                            <div
-                                key={p.path}
-                                className="flex items-center gap-3 p-3 rounded theme-bg-secondary hover:theme-bg-tertiary group cursor-pointer"
-                                onClick={() => handleOpenRecentProject(p.path)}
+        return (
+            <div className="flex-1 flex flex-col min-h-0 p-4 overflow-auto">
+                <div className="max-w-4xl mx-auto w-full space-y-8">
+                    {/* Recent filesystem projects */}
+                    <div>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold theme-text-primary">Projects</h2>
+                            <button
+                                onClick={handleOpenProject}
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-xs flex items-center gap-1.5"
                             >
-                                <div className="w-10 h-12 rounded bg-gradient-to-br from-indigo-700 to-indigo-950 flex items-center justify-center shrink-0">
-                                    <BookOpen size={18} className="text-indigo-200" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium truncate theme-text-primary">{p.name}</div>
-                                    <div className="text-xs text-gray-500 truncate">{p.path}</div>
-                                    <div className="text-[10px] text-gray-600">
-                                        Opened {new Date(p.openedAt).toLocaleDateString()}
-                                    </div>
-                                </div>
+                                <FolderOpen size={12} />
+                                Open Project Folder
+                            </button>
+                        </div>
+
+                        {recentProjects.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-10 text-gray-500">
+                                <BookOpen size={40} className="opacity-30 mb-3" />
+                                <p className="text-sm mb-2">No project folders opened yet.</p>
+                                <p className="text-xs text-gray-500 mb-4">Open a folder containing a LaTeX book or other project.</p>
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); handleRemoveRecentProject(p.path); }}
-                                    className="p-1.5 opacity-0 group-hover:opacity-100 theme-hover rounded text-gray-500 hover:text-red-400"
-                                    title="Remove from recent"
+                                    onClick={handleOpenProject}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm flex items-center gap-2"
                                 >
-                                    <X size={14} />
+                                    <FolderOpen size={14} />
+                                    Open Project Folder
                                 </button>
                             </div>
-                        ))}
+                        ) : (
+                            <div className="space-y-2">
+                                {recentProjects.map((p) => (
+                                    <div
+                                        key={p.path}
+                                        className="flex items-center gap-3 p-3 rounded theme-bg-secondary hover:theme-bg-tertiary group cursor-pointer"
+                                        onClick={() => handleOpenRecentProject(p.path)}
+                                    >
+                                        <div className="w-10 h-12 rounded bg-gradient-to-br from-indigo-700 to-indigo-950 flex items-center justify-center shrink-0">
+                                            <BookOpen size={18} className="text-indigo-200" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium truncate theme-text-primary">{p.name}</div>
+                                            <div className="text-xs text-gray-500 truncate">{p.path}</div>
+                                            <div className="text-[10px] text-gray-600">
+                                                Opened {new Date(p.openedAt).toLocaleDateString()}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleRemoveRecentProject(p.path); }}
+                                            className="p-1.5 opacity-0 group-hover:opacity-100 theme-hover rounded text-gray-500 hover:text-red-400"
+                                            title="Remove from recent"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Writing projects */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-4">
+                            <PenTool size={18} className="text-indigo-400" />
+                            <span className="font-medium text-sm">Writing Projects</span>
+                            <div className="flex-1" />
+                            <button onClick={importProject} className="px-3 py-1.5 text-xs theme-bg-tertiary theme-hover rounded flex items-center gap-1">
+                                <Upload size={12} /> Import
+                            </button>
+                            <button onClick={() => setShowNewProject(true)} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-1">
+                                <Plus size={12} /> New Writing Project
+                            </button>
+                        </div>
+
+                        {projects.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-10 text-gray-500">
+                                <PenTool size={40} className="opacity-30 mb-3" />
+                                <p className="text-sm mb-2">No writing projects yet.</p>
+                                <p className="text-xs text-gray-500 mb-4">Create a novel, story, screenplay, journal, or poem.</p>
+                                <button onClick={() => setShowNewProject(true)}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
+                                    Create Your First Project
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                                {projects.map(proj => (
+                                    <div key={proj.id}
+                                        onClick={() => {
+                                            setActiveProjectId(proj.id);
+                                            setActiveChapterId(proj.chapters[0]?.id || null);
+                                        }}
+                                        className="group relative cursor-pointer rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition-all">
+                                        <div className={`h-48 bg-gradient-to-b ${proj.coverColor} p-4 flex flex-col justify-end`}>
+                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={(e) => { e.stopPropagation(); deleteProject(proj.id); }}
+                                                    className="p-1.5 bg-red-600/80 rounded hover:bg-red-600" title="Delete">
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                            <div className="text-[10px] uppercase tracking-wide text-white/60 mb-1">{proj.type}</div>
+                                            <h3 className="font-bold text-white text-lg leading-tight">{proj.title}</h3>
+                                            {proj.author && <p className="text-xs text-white/70 mt-1">by {proj.author}</p>}
+                                        </div>
+                                        <div className="p-3 theme-bg-secondary">
+                                            <div className="flex items-center justify-between text-[10px] text-gray-400">
+                                                <span>{proj.chapters.length} chapter{proj.chapters.length !== 1 ? 's' : ''}</span>
+                                                <span>{proj.chapters.reduce((s, c) => s + c.wordCount, 0).toLocaleString()} words</span>
+                                            </div>
+                                            {proj.wordGoal > 0 && (
+                                                <div className="mt-2 h-1 bg-gray-700 rounded overflow-hidden">
+                                                    <div className="h-full bg-indigo-500 rounded transition-all"
+                                                        style={{ width: `${Math.min(100, (proj.chapters.reduce((s, c) => s + c.wordCount, 0) / proj.wordGoal) * 100)}%` }} />
+                                                </div>
+                                            )}
+                                            <p className="text-[10px] text-gray-500 mt-1">{formatDate(proj.updatedAt)}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {showNewProject && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setShowNewProject(false)}>
+                        <div className="theme-bg-secondary rounded-xl shadow-2xl p-6 w-[420px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+                            <h3 className="text-lg font-bold mb-4">New Writing Project</h3>
+                            <div className="space-y-3">
+                                <input type="text" value={newProjectTitle} onChange={(e) => setNewProjectTitle(e.target.value)}
+                                    placeholder="Project title..." autoFocus
+                                    onKeyDown={(e) => { if (e.key === 'Enter') createProject(); }}
+                                    className="w-full px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                                <div>
+                                    <label className="text-xs text-gray-400 mb-1 block">Type</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {(['novel', 'story', 'manga', 'screenplay', 'poetry', 'journal'] as const).map(t => (
+                                            <button key={t} onClick={() => setNewProjectType(t)}
+                                                className={`px-3 py-2 rounded text-xs capitalize ${newProjectType === t ? 'bg-indigo-600 text-white' : 'theme-bg-tertiary theme-hover'}`}>
+                                                {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 justify-end pt-2">
+                                    <button onClick={() => setShowNewProject(false)} className="px-4 py-2 theme-bg-tertiary rounded text-sm">Cancel</button>
+                                    <button onClick={createProject} disabled={!newProjectTitle.trim()}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded text-sm">Create</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
-        </div>
-    );
+        );
+    };
 
     // ─── Render Browse ───
     const renderBrowse = () => (
@@ -746,107 +846,9 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpen
     );
 
     // ─── Render Write ───
+    // Writing workspace for the active writing project. Called from Projects tab.
     const renderWrite = () => {
-        if (!activeProject) {
-            // Project list
-            return (
-                <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex items-center gap-2 p-3 border-b theme-border theme-bg-secondary">
-                        <PenTool size={18} className="text-indigo-400" />
-                        <span className="font-medium text-sm">Writing Projects</span>
-                        <div className="flex-1" />
-                        <button onClick={importProject} className="px-3 py-1.5 text-xs theme-bg-tertiary theme-hover rounded flex items-center gap-1">
-                            <Upload size={12} /> Import
-                        </button>
-                        <button onClick={() => setShowNewProject(true)} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded flex items-center gap-1">
-                            <Plus size={12} /> New Project
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-auto p-4">
-                        {projects.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                                <PenTool size={48} className="opacity-30 mb-4" />
-                                <p>No writing projects yet</p>
-                                <p className="text-xs mt-2">Create a novel, story, screenplay, or journal</p>
-                                <button onClick={() => setShowNewProject(true)}
-                                    className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm">
-                                    Create Your First Project
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                                {projects.map(proj => (
-                                    <div key={proj.id}
-                                        onClick={() => {
-                                            setActiveProjectId(proj.id);
-                                            setActiveChapterId(proj.chapters[0]?.id || null);
-                                        }}
-                                        className="group relative cursor-pointer rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition-all">
-                                        <div className={`h-48 bg-gradient-to-b ${proj.coverColor} p-4 flex flex-col justify-end`}>
-                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={(e) => { e.stopPropagation(); deleteProject(proj.id); }}
-                                                    className="p-1.5 bg-red-600/80 rounded hover:bg-red-600" title="Delete">
-                                                    <Trash2 size={12} />
-                                                </button>
-                                            </div>
-                                            <div className="text-[10px] uppercase tracking-wide text-white/60 mb-1">{proj.type}</div>
-                                            <h3 className="font-bold text-white text-lg leading-tight">{proj.title}</h3>
-                                            {proj.author && <p className="text-xs text-white/70 mt-1">by {proj.author}</p>}
-                                        </div>
-                                        <div className="p-3 theme-bg-secondary">
-                                            <div className="flex items-center justify-between text-[10px] text-gray-400">
-                                                <span>{proj.chapters.length} chapter{proj.chapters.length !== 1 ? 's' : ''}</span>
-                                                <span>{proj.chapters.reduce((s, c) => s + c.wordCount, 0).toLocaleString()} words</span>
-                                            </div>
-                                            {proj.wordGoal > 0 && (
-                                                <div className="mt-2 h-1 bg-gray-700 rounded overflow-hidden">
-                                                    <div className="h-full bg-indigo-500 rounded transition-all"
-                                                        style={{ width: `${Math.min(100, (proj.chapters.reduce((s, c) => s + c.wordCount, 0) / proj.wordGoal) * 100)}%` }} />
-                                                </div>
-                                            )}
-                                            <p className="text-[10px] text-gray-500 mt-1">{formatDate(proj.updatedAt)}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {showNewProject && (
-                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setShowNewProject(false)}>
-                            <div className="theme-bg-secondary rounded-xl shadow-2xl p-6 w-[420px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-                                <h3 className="text-lg font-bold mb-4">New Writing Project</h3>
-                                <div className="space-y-3">
-                                    <input type="text" value={newProjectTitle} onChange={(e) => setNewProjectTitle(e.target.value)}
-                                        placeholder="Project title..." autoFocus
-                                        onKeyDown={(e) => { if (e.key === 'Enter') createProject(); }}
-                                        className="w-full px-3 py-2 theme-bg-tertiary border theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
-                                    <div>
-                                        <label className="text-xs text-gray-400 mb-1 block">Type</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {(['novel', 'story', 'manga', 'screenplay', 'poetry', 'journal'] as const).map(t => (
-                                                <button key={t} onClick={() => setNewProjectType(t)}
-                                                    className={`px-3 py-2 rounded text-xs capitalize ${newProjectType === t ? 'bg-indigo-600 text-white' : 'theme-bg-tertiary theme-hover'}`}>
-                                                    {t}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2 justify-end pt-2">
-                                        <button onClick={() => setShowNewProject(false)} className="px-4 py-2 theme-bg-tertiary rounded text-sm">Cancel</button>
-                                        <button onClick={createProject} disabled={!newProjectTitle.trim()}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded text-sm">Create</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // Active project editor
+        if (!activeProject) return null;
         return (
             <div className={`flex-1 flex min-h-0 ${isFullscreen ? 'fixed inset-0 z-50 theme-bg-primary' : ''}`}>
                 {/* Writing sidebar */}
