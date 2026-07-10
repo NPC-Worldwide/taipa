@@ -9,6 +9,7 @@ export interface IElectronAPI {
   readFileContent: (filePath: string) => Promise<any>;
   writeFileContent: (filePath: string, content: string) => Promise<any>;
   proxyFetch: (url: string, options?: any) => Promise<any>;
+  compileLatex: (options: { projectPath: string; rootDocument: string; engine: string; outputDir: string; bibTool?: string }) => Promise<any>;
 }
 
 contextBridge.exposeInMainWorld('api', {
@@ -20,6 +21,7 @@ contextBridge.exposeInMainWorld('api', {
   readFileContent: (filePath: string) => ipcRenderer.invoke('read-file-content', filePath),
   writeFileContent: (filePath: string, content: string) => ipcRenderer.invoke('write-file-content', filePath, content),
   proxyFetch: (url: string, options?: any) => ipcRenderer.invoke('proxy-fetch', url, options),
+  compileLatex: (options: any) => ipcRenderer.invoke('compile-latex', options),
 } as IElectronAPI);
 
 declare global {
@@ -27,3 +29,5 @@ declare global {
     api: IElectronAPI;
   }
 }
+
+export {};

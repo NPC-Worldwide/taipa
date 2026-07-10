@@ -1221,7 +1221,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
             {/* Top nav */}
             <div className="flex items-center gap-1 px-2 py-1.5 border-b theme-border theme-bg-secondary shrink-0">
                 <BookOpen size={18} className="text-indigo-400 mr-1" />
-                <span className="text-sm font-bold text-indigo-400 mr-3">Grimoire</span>
+                <span className="text-sm font-bold text-indigo-400 mr-3">Taipa</span>
                 {([
                     { id: 'browse' as const, icon: Search, label: 'Browse' },
                     { id: 'write' as const, icon: PenTool, label: 'Write' },
