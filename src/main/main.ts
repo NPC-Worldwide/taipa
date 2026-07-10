@@ -44,10 +44,15 @@ ipcMain.handle('window-is-maximized', () => {
 function killBackendProcess() {
   if (!backendProcess) return;
   console.log('[Main] Killing backend process');
+  const pid = backendProcess.pid;
+  if (!pid) {
+    backendProcess = null;
+    return;
+  }
   if (process.platform === 'win32') {
-    try { require('child_process').execSync(`taskkill /F /T /PID ${backendProcess.pid}`, { stdio: 'ignore' }); } catch {}
+    try { require('child_process').execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' }); } catch {}
   } else {
-    try { process.kill(-backendProcess.pid, 'SIGTERM'); } catch {}
+    try { process.kill(-pid, 'SIGTERM'); } catch {}
   }
   backendProcess = null;
 }
