@@ -162,10 +162,8 @@ interface RecentProject {
 
 const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpenProject }) => {
     // ─── Mode ───
-    const [activeMode, setActiveMode] = useState<'browse' | 'projects' | 'write' | 'collections' | 'reading'>(() =>
-        (localStorage.getItem('grimoire_mode') as any) || 'browse'
-    );
-    useEffect(() => { localStorage.setItem('grimoire_mode', activeMode); }, [activeMode]);
+    // Simplified navigation: Projects is the only top-level tab. Writing happens inside a project.
+    const activeMode = 'projects';
 
     // ─── Recent filesystem projects ───
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>(() => {
@@ -1343,33 +1341,16 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpen
             <div className="flex items-center gap-1 px-2 py-1.5 border-b theme-border theme-bg-secondary shrink-0">
                 <BookOpen size={18} className="text-indigo-400 mr-1" />
                 <span className="text-sm font-bold text-indigo-400 mr-3">Taipa</span>
-                {([
-                    { id: 'browse' as const, icon: Search, label: 'Browse' },
-                    { id: 'projects' as const, icon: FolderOpen, label: 'Projects' },
-                    { id: 'write' as const, icon: PenTool, label: 'Write' },
-                    { id: 'collections' as const, icon: Layers, label: 'Collections' },
-                    { id: 'reading' as const, icon: Eye, label: 'Reading' },
-                ]).map(tab => (
-                    <button key={tab.id} onClick={() => setActiveMode(tab.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs ${
-                            activeMode === tab.id
-                                ? 'bg-indigo-600/20 text-indigo-300 font-medium'
-                                : 'theme-hover theme-text-secondary'
-                        }`}>
-                        <tab.icon size={13} />{tab.label}
-                    </button>
-                ))}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-indigo-600/20 text-indigo-300 font-medium">
+                    <FolderOpen size={13} /> Projects
+                </div>
                 <div className="flex-1" />
                 <span className="text-[10px] text-gray-500">
-                    {documents.length} docs | {projects.length} projects | {collections.length} shelves
+                    {projects.length} writing projects
                 </span>
             </div>
 
-            {activeMode === 'browse' && renderBrowse()}
-            {activeMode === 'projects' && renderProjects()}
-            {activeMode === 'write' && renderWrite()}
-            {activeMode === 'collections' && renderCollections()}
-            {activeMode === 'reading' && renderReading()}
+            {renderProjects()}
         </div>
     );
 };
