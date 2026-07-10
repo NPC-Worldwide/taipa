@@ -17,6 +17,29 @@ protocol.registerSchemesAsPrivileged([{
 }]);
 
 let backendProcess: ReturnType<typeof spawn> | null = null;
+let mainWindow: BrowserWindow | null = null;
+
+// Window control IPC handlers
+ipcMain.on('window-minimize', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+
+ipcMain.on('window-close', () => {
+  mainWindow?.close();
+});
+
+ipcMain.handle('window-is-maximized', () => {
+  return mainWindow?.isMaximized() ?? false;
+});
 
 function killBackendProcess() {
   if (!backendProcess) return;
@@ -123,12 +146,14 @@ async function startBackend() {
 app.on('before-quit', () => killBackendProcess());
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    ...(isMac ? { trafficLightPosition: { x: 12, y: 8 } } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -136,6 +161,19 @@ function createWindow() {
       webSecurity: false,
       allowRunningInsecureContent: true,
     },
+  });
+  mainWindow = win;
+
+  // Track maximize state changes
+  win.on('maximize', () => {
+    win.webContents.send('window-state-changed', { isMaximized: true });
+  });
+  win.on('unmaximize', () => {
+    win.webContents.send('window-state-changed', { isMaximized: false });
+  });
+
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null;
   });
 
   if (IS_DEV) {
