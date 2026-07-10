@@ -1,31 +1,73 @@
 import { ProjectManifest, ProjectType, EditorType, ManifestChapter, MANIFEST_VERSION } from '../types/project';
 
 /**
+ * Locate .tex files either at the root or inside an immediate subdirectory
+ * (e.g. "latex/"). Returns the tex filenames and a path prefix relative to root.
+ */
+async function findLatexRoot(
+  rootPath: string,
+  fileList: { name: string; isDirectory: boolean }[]
+): Promise<{ texFiles: string[]; prefix: string; bibFiles: string[] } | null> {
+  const rootTex = fileList
+    .filter(f => !f.isDirectory && f.name.endsWith('.tex'))
+    .map(f => f.name);
+  const rootBib = fileList
+    .filter(f => !f.isDirectory && f.name.endsWith('.bib'))
+    .map(f => f.name);
+
+  if (rootTex.length > 0) {
+    return { texFiles: rootTex, prefix: '', bibFiles: rootBib };
+  }
+
+  // Search immediate subdirectories for a LaTeX layout
+  const subdirs = fileList.filter(f => f.isDirectory && !f.name.startsWith('.') && f.name !== 'node_modules');
+  // Prefer a directory literally named "latex" if it contains tex
+  const latexDir = subdirs.find(d => d.name.toLowerCase() === 'latex');
+  const orderedDirs = latexDir ? [latexDir, ...subdirs.filter(d => d !== latexDir)] : subdirs;
+
+  for (const dir of orderedDirs) {
+    try {
+      const subItems = await window.api?.readDirectory?.(`${rootPath}/${dir.name}`);
+      if (!subItems || !Array.isArray(subItems)) continue;
+      const subTex = subItems
+        .filter((f: any) => !f.isDirectory && f.name.endsWith('.tex'))
+        .map((f: any) => f.name);
+      const subBib = subItems
+        .filter((f: any) => !f.isDirectory && f.name.endsWith('.bib'))
+        .map((f: any) => f.name);
+      if (subTex.length > 0) {
+        return { texFiles: subTex, prefix: `${dir.name}/`, bibFiles: subBib };
+      }
+    } catch { /* ignore */ }
+  }
+
+  return null;
+}
+
+/**
  * Detect project type and build manifest from a directory listing.
  */
 export async function detectProject(
   rootPath: string,
   fileList: { name: string; isDirectory: boolean }[]
 ): Promise<{ type: ProjectType; manifest: Partial<ProjectManifest> } | null> {
-  const names = fileList.map(f => f.name);
+  const latexRoot = await findLatexRoot(rootPath, fileList);
 
-  // 1. Check for LaTeX book
-  const texFiles = names.filter(n => n.endsWith('.tex'));
-  const bibFiles = names.filter(n => n.endsWith('.bib'));
-  const hasLatex = texFiles.length > 0;
+  if (latexRoot) {
+    const { texFiles, prefix, bibFiles } = latexRoot;
 
-  if (hasLatex) {
     const mainTex = texFiles.find(n =>
       n.toLowerCase() === 'main.tex' ||
       n.toLowerCase().includes('main')
     ) || texFiles[0];
+    const rootDocument = `${prefix}${mainTex}`;
 
     // Try to read the root tex to find chapters
     let chapters: ManifestChapter[] = [];
     try {
-      const content = await window.api?.readFileContent?.(`${rootPath}/${mainTex}`);
+      const content = await window.api?.readFileContent?.(`${rootPath}/${rootDocument}`);
       if (content?.content) {
-        chapters = parseLatexInputs(content.content, rootPath, mainTex);
+        chapters = parseLatexInputs(content.content, prefix);
       }
     } catch { /* ignore */ }
 
@@ -36,7 +78,7 @@ export async function detectProject(
         .map((n, i) => ({
           id: `ch-${i}`,
           title: n.replace(/\.tex$/, '').replace(/_/g, ' '),
-          file: n,
+          file: `${prefix}${n}`,
           order: i,
         }));
     }
@@ -47,9 +89,9 @@ export async function detectProject(
         version: MANIFEST_VERSION,
         type: 'latex_book',
         name: rootPath.split('/').pop() || 'Untitled',
-        rootDocument: mainTex,
+        rootDocument,
         chapters: [
-          { id: 'root', title: 'Main Document', file: mainTex, order: -1 },
+          { id: 'root', title: 'Main Document', file: rootDocument, order: -1 },
           ...chapters,
         ],
         compile: {
@@ -64,8 +106,9 @@ export async function detectProject(
   }
 
   // 2. Check for markdown collection
+  const names = fileList.map(f => f.name);
   const mdFiles = names.filter(n => n.endsWith('.md') || n.endsWith('.txt'));
-  if (mdFiles.length > 0 && !hasLatex) {
+  if (mdFiles.length > 0) {
     return {
       type: 'plain_text',
       manifest: {
@@ -104,11 +147,11 @@ export async function detectProject(
 
 /**
  * Parse \input{} and \include{} commands from LaTeX source.
+ * `prefix` is a subdirectory like "latex/" when the root document lives there.
  */
 function parseLatexInputs(
   texContent: string,
-  rootPath: string,
-  mainFile: string
+  prefix: string
 ): ManifestChapter[] {
   const chapters: ManifestChapter[] = [];
   // Match \input{filename} or \include{filename} (with or without .tex)
@@ -122,7 +165,7 @@ function parseLatexInputs(
     chapters.push({
       id: `latex-${order}`,
       title: filePath.replace(/\.tex$/, '').replace(/_/g, ' '),
-      file: filePath,
+      file: `${prefix}${filePath}`,
       order: order++,
     });
   }

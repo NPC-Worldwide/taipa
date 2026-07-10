@@ -104,6 +104,7 @@ interface BookCollection {
 interface GrimoireProps {
     currentPath: string;
     onOpenDocument: (path: string, type: string) => void;
+    onOpenProject?: (path: string) => void;
     onClose?: () => void;
 }
 
@@ -151,12 +152,68 @@ const countWords = (text: string): number => {
 
 // ─── Component ───
 
-const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
+const RECENT_PROJECTS_KEY = 'taipa_recent_projects';
+
+interface RecentProject {
+    path: string;
+    name: string;
+    openedAt: string;
+}
+
+const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpenProject }) => {
     // ─── Mode ───
-    const [activeMode, setActiveMode] = useState<'browse' | 'write' | 'collections' | 'reading'>(() =>
+    const [activeMode, setActiveMode] = useState<'browse' | 'projects' | 'write' | 'collections' | 'reading'>(() =>
         (localStorage.getItem('grimoire_mode') as any) || 'browse'
     );
     useEffect(() => { localStorage.setItem('grimoire_mode', activeMode); }, [activeMode]);
+
+    // ─── Recent filesystem projects ───
+    const [recentProjects, setRecentProjects] = useState<RecentProject[]>(() => {
+        try {
+            const raw = localStorage.getItem(RECENT_PROJECTS_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const saveRecentProjects = useCallback((projects: RecentProject[]) => {
+        const trimmed = projects.slice(0, 20);
+        setRecentProjects(trimmed);
+        localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(trimmed));
+    }, []);
+
+    const handleOpenProject = useCallback(async () => {
+        const result = await window.api?.showOpenDialog?.({
+            properties: ['openDirectory'],
+            title: 'Open Writing Project',
+        });
+        const folderPath = result?.filePaths?.[0];
+        if (!folderPath) return;
+
+        const name = folderPath.split('/').pop() || 'Untitled';
+        const next = [
+            { path: folderPath, name, openedAt: new Date().toISOString() },
+            ...recentProjects.filter(p => p.path !== folderPath),
+        ];
+        saveRecentProjects(next);
+        onOpenProject?.(folderPath);
+    }, [onOpenProject, recentProjects, saveRecentProjects]);
+
+    const handleOpenRecentProject = useCallback((folderPath: string) => {
+        const name = folderPath.split('/').pop() || 'Untitled';
+        const next = [
+            { path: folderPath, name, openedAt: new Date().toISOString() },
+            ...recentProjects.filter(p => p.path !== folderPath),
+        ];
+        saveRecentProjects(next);
+        onOpenProject?.(folderPath);
+    }, [onOpenProject, recentProjects, saveRecentProjects]);
+
+    const handleRemoveRecentProject = useCallback((folderPath: string) => {
+        const next = recentProjects.filter(p => p.path !== folderPath);
+        saveRecentProjects(next);
+    }, [recentProjects, saveRecentProjects]);
 
     // ─── Browse state ───
     const [documents, setDocuments] = useState<Document[]>([]);
@@ -510,6 +567,70 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
             c.id === collectionId ? { ...c, docPaths: c.docPaths.filter(p => p !== docPath) } : c
         ));
     }, [collections, saveCollections]);
+
+    // ─── Render Projects ───
+    const renderProjects = () => (
+        <div className="flex-1 flex flex-col min-h-0 p-4 overflow-auto">
+            <div className="max-w-2xl mx-auto w-full">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold theme-text-primary">Projects</h2>
+                    <button
+                        onClick={handleOpenProject}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-xs flex items-center gap-1.5"
+                    >
+                        <FolderOpen size={12} />
+                        Open Project Folder
+                    </button>
+                </div>
+
+                {recentProjects.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                        <BookOpen size={48} className="opacity-30 mb-4" />
+                        <p className="text-sm mb-2">No projects opened yet.</p>
+                        <p className="text-xs text-gray-500 mb-4">Open a folder containing a LaTeX book, novel, or other writing project.</p>
+                        <button
+                            onClick={handleOpenProject}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-sm flex items-center gap-2"
+                        >
+                            <FolderOpen size={14} />
+                            Open Project Folder
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold px-1">
+                            Recent
+                        </div>
+                        {recentProjects.map((p) => (
+                            <div
+                                key={p.path}
+                                className="flex items-center gap-3 p-3 rounded theme-bg-secondary hover:theme-bg-tertiary group cursor-pointer"
+                                onClick={() => handleOpenRecentProject(p.path)}
+                            >
+                                <div className="w-10 h-12 rounded bg-gradient-to-br from-indigo-700 to-indigo-950 flex items-center justify-center shrink-0">
+                                    <BookOpen size={18} className="text-indigo-200" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium truncate theme-text-primary">{p.name}</div>
+                                    <div className="text-xs text-gray-500 truncate">{p.path}</div>
+                                    <div className="text-[10px] text-gray-600">
+                                        Opened {new Date(p.openedAt).toLocaleDateString()}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleRemoveRecentProject(p.path); }}
+                                    className="p-1.5 opacity-0 group-hover:opacity-100 theme-hover rounded text-gray-500 hover:text-red-400"
+                                    title="Remove from recent"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     // ─── Render Browse ───
     const renderBrowse = () => (
@@ -1224,6 +1345,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
                 <span className="text-sm font-bold text-indigo-400 mr-3">Taipa</span>
                 {([
                     { id: 'browse' as const, icon: Search, label: 'Browse' },
+                    { id: 'projects' as const, icon: FolderOpen, label: 'Projects' },
                     { id: 'write' as const, icon: PenTool, label: 'Write' },
                     { id: 'collections' as const, icon: Layers, label: 'Collections' },
                     { id: 'reading' as const, icon: Eye, label: 'Reading' },
@@ -1244,6 +1366,7 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument }) => {
             </div>
 
             {activeMode === 'browse' && renderBrowse()}
+            {activeMode === 'projects' && renderProjects()}
             {activeMode === 'write' && renderWrite()}
             {activeMode === 'collections' && renderCollections()}
             {activeMode === 'reading' && renderReading()}

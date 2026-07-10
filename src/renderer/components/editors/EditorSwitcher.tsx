@@ -1,5 +1,6 @@
 import React from 'react';
 import { OpenFile, ProjectManifest } from '../../types/project';
+import PdfViewer from './PdfViewer';
 
 interface EditorSwitcherProps {
   file: OpenFile | null;
@@ -18,11 +19,7 @@ const EditorSwitcher: React.FC<EditorSwitcherProps> = ({ file, onContentChange, 
   }
 
   if (file.editorType === 'pdf') {
-    return (
-      <div className="h-full w-full flex items-center justify-center text-gray-500">
-        <p>PDF viewer not implemented yet</p>
-      </div>
-    );
+    return <PdfViewer filePath={file.path} />;
   }
 
   if (file.editorType === 'docx') {

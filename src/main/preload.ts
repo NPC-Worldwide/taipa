@@ -19,6 +19,13 @@ export interface IElectronAPI {
     isMaximized: () => Promise<boolean>;
   };
   onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => () => void;
+  gitStatus: (cwd: string) => Promise<any>;
+  gitStage: (params: { repoRoot: string; filePath: string }) => Promise<any>;
+  gitUnstage: (params: { repoRoot: string; filePath: string }) => Promise<any>;
+  gitDiscard: (params: { repoRoot: string; filePath: string }) => Promise<any>;
+  gitCommit: (params: { repoRoot: string; message: string }) => Promise<any>;
+  gitPush: (params: { repoRoot: string }) => Promise<any>;
+  gitPull: (params: { repoRoot: string }) => Promise<any>;
 }
 
 contextBridge.exposeInMainWorld('api', {
@@ -44,6 +51,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('window-state-changed', handler);
     return () => ipcRenderer.removeListener('window-state-changed', handler);
   },
+  gitStatus: (cwd: string) => ipcRenderer.invoke('git-status', cwd),
+  gitStage: (params: any) => ipcRenderer.invoke('git-stage', params),
+  gitUnstage: (params: any) => ipcRenderer.invoke('git-unstage', params),
+  gitDiscard: (params: any) => ipcRenderer.invoke('git-discard', params),
+  gitCommit: (params: any) => ipcRenderer.invoke('git-commit', params),
+  gitPush: (params: any) => ipcRenderer.invoke('git-push', params),
+  gitPull: (params: any) => ipcRenderer.invoke('git-pull', params),
 } as IElectronAPI);
 
 declare global {

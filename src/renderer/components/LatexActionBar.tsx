@@ -8,6 +8,8 @@ interface LatexActionBarProps {
   engine: string;
   outputDir: string;
   bibTool?: string;
+  hasUnsavedChanges?: boolean;
+  onSaveAll?: () => Promise<void>;
   onCompileComplete?: (result: CompileResult) => void;
 }
 
@@ -17,6 +19,8 @@ const LatexActionBar: React.FC<LatexActionBarProps> = ({
   engine,
   outputDir,
   bibTool,
+  hasUnsavedChanges,
+  onSaveAll,
   onCompileComplete,
 }) => {
   const [compiling, setCompiling] = useState(false);
@@ -27,6 +31,11 @@ const LatexActionBar: React.FC<LatexActionBarProps> = ({
     setCompiling(true);
     setLastResult(null);
     try {
+      // Make sure all edits are on disk before the LaTeX engine reads them.
+      if (hasUnsavedChanges && onSaveAll) {
+        await onSaveAll();
+      }
+
       const result = await window.api?.compileLatex?.({
         projectPath,
         rootDocument,

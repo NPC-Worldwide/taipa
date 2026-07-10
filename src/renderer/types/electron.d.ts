@@ -23,6 +23,13 @@ export interface IElectronAPI {
     isMaximized: () => Promise<boolean>;
   };
   onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => () => void;
+  gitStatus: (cwd: string) => Promise<any>;
+  gitStage: (params: { repoRoot: string; filePath: string }) => Promise<any>;
+  gitUnstage: (params: { repoRoot: string; filePath: string }) => Promise<any>;
+  gitDiscard: (params: { repoRoot: string; filePath: string }) => Promise<any>;
+  gitCommit: (params: { repoRoot: string; message: string }) => Promise<any>;
+  gitPush: (params: { repoRoot: string }) => Promise<any>;
+  gitPull: (params: { repoRoot: string }) => Promise<any>;
 }
 
 declare global {

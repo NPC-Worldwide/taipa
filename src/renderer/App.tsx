@@ -41,6 +41,7 @@ export default function App() {
           <Taipa
             currentPath={homeDir}
             onOpenDocument={() => {}}
+            onOpenProject={handleOpenProject}
           />
         )}
         {mode === 'project' && (

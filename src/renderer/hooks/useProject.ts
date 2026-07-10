@@ -105,10 +105,13 @@ export function useProject() {
     }
 
     try {
-      const result = await window.api?.readFileContent?.(fullPath);
-      const content = result?.content || '';
       const ext = relativePath.split('.').pop()?.toLowerCase() || '';
       const editorType = getEditorType(relativePath, project.manifest.type, project.manifest.editorOverrides);
+
+      // PDFs and DOCX are handled by dedicated viewers; don't load their binary contents as text.
+      const isBinary = editorType === 'pdf' || editorType === 'docx';
+      const result = !isBinary ? await window.api?.readFileContent?.(fullPath) : { content: '' };
+      const content = result?.content || '';
 
       const openFile: OpenFile = {
         path: fullPath,
@@ -177,6 +180,17 @@ export function useProject() {
 
   const activeFile = openFiles.find(f => f.path === activeFilePath) || null;
 
+  const readProjectFile = useCallback(async (relativePath: string): Promise<string> => {
+    if (!project) return '';
+    try {
+      const result = await window.api?.readFileContent?.(`${project.path}/${relativePath}`);
+      return result?.content || '';
+    } catch (e) {
+      console.error('Failed to read project file:', relativePath, e);
+      return '';
+    }
+  }, [project]);
+
   return {
     project,
     openFiles,
@@ -190,5 +204,6 @@ export function useProject() {
     saveFile,
     saveAll,
     refreshFileTree,
+    readProjectFile,
   };
 }
