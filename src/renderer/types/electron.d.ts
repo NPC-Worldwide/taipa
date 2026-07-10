@@ -14,6 +14,15 @@ export interface IElectronAPI {
     outputDir: string;
     bibTool?: string;
   }) => Promise<any>;
+  windowControls: {
+    minimize: () => void;
+    maximize: () => void;
+    close: () => void;
+  };
+  windowState: {
+    isMaximized: () => Promise<boolean>;
+  };
+  onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => () => void;
 }
 
 declare global {
