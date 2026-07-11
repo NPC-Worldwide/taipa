@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const IS_DEV = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+const ICON_PATH = path.join(__dirname, '..', 'taipa.png');
 const BACKEND_PORT = IS_DEV ? '7138' : '5138';
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 
@@ -160,6 +161,7 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     ...(isMac ? { trafficLightPosition: { x: 12, y: 8 } } : {}),
+    ...(fs.existsSync(ICON_PATH) ? { icon: ICON_PATH } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

@@ -1,7 +1,7 @@
 {
   "name": "taipa",
   "version": "0.1.0",
-  "description": "Taipa - A standalone writing and document studio",
+  "description": "Taipa - A writing and document studio",
   "author": "Chris Agostino <info@npcworldwi.de>",
   "license": "MIT",
   "type": "module",
@@ -22,7 +22,7 @@
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.471.1",
-    "npcts": "^0.1.18",
+    "npcts": "^0.1.25",
     "react": "^18.3.1",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.3.1",
@@ -54,6 +54,7 @@
       "package.json"
     ],
     "mac": {
+      "icon": "taipa.png",
       "target": [
         {
           "target": "dmg",
@@ -65,9 +66,11 @@
       "category": "public.app-category.productivity"
     },
     "win": {
+      "icon": "taipa.png",
       "target": "nsis"
     },
     "linux": {
+      "icon": "taipa.png",
       "target": [
         "deb",
         "AppImage"

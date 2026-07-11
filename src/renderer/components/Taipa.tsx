@@ -7,10 +7,11 @@ import {
     Clock, BarChart3, Settings, Archive, Library, Sparkles, FileJson,
     ChevronLeft, MoreVertical, Copy, Move, Check, Hash, Bold, Italic,
     Heading1, Heading2, Heading3, ListOrdered, Quote, Code, Link,
-    Minus, CornerDownLeft, Maximize2, Minimize2, Columns, PanelLeft
+    Minus, CornerDownLeft, Maximize2, Minimize2, Columns, PanelLeft, Network
 } from 'lucide-react';
 import {
-    NovelEditor, ScreenplayEditor, PoetryEditor, JournalEditor, MangaEditor
+    NovelEditor, ScreenplayEditor, PoetryEditor, JournalEditor, MangaEditor,
+    MindMapViewer, type MindMapData
 } from 'npcts';
 
 // ─── Types ───
@@ -163,7 +164,17 @@ interface RecentProject {
 const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpenProject }) => {
     // ─── Mode ───
     // Simplified navigation: Projects is the only top-level tab. Writing happens inside a project.
-    const activeMode = 'projects';
+    const [activeMode, setActiveMode] = useState<'projects' | 'mindmap'>('projects');
+
+    // ─── Mind Map state ───
+    const [mindMapData, setMindMapData] = useState<MindMapData | null>(() => {
+        try {
+            const raw = localStorage.getItem('taipa_mindmap');
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    });
 
     // ─── Recent filesystem projects ───
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>(() => {
@@ -283,6 +294,11 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpen
     const saveFavorites = useCallback((favs: Set<string>) => {
         setFavorites(favs);
         localStorage.setItem('grimoire_favorites', JSON.stringify([...favs]));
+    }, []);
+
+    const saveMindMap = useCallback((data: MindMapData) => {
+        setMindMapData(data);
+        localStorage.setItem('taipa_mindmap', JSON.stringify(data));
     }, []);
 
     // ─── Browse logic ───
@@ -1317,6 +1333,19 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpen
         );
     };
 
+    const renderMindMap = () => {
+        return (
+            <div className="flex-1 overflow-hidden">
+                <MindMapViewer
+                    initialData={mindMapData || undefined}
+                    onChange={saveMindMap}
+                    onSave={saveMindMap}
+                    defaultEditMode={true}
+                />
+            </div>
+        );
+    };
+
     // ─── Main Render ───
     return (
         <div className="flex-1 flex flex-col min-h-0 theme-bg-primary">
@@ -1324,16 +1353,20 @@ const Grimoire: React.FC<GrimoireProps> = ({ currentPath, onOpenDocument, onOpen
             <div className="flex items-center gap-1 px-2 py-1.5 border-b theme-border theme-bg-secondary shrink-0">
                 <BookOpen size={18} className="text-indigo-400 mr-1" />
                 <span className="text-sm font-bold text-indigo-400 mr-3">Taipa</span>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-indigo-600/20 text-indigo-300 font-medium">
+                <button onClick={() => setActiveMode('projects')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${activeMode === 'projects' ? 'bg-indigo-600/20 text-indigo-300' : 'theme-text-muted hover:theme-bg-tertiary'}`}>
                     <FolderOpen size={13} /> Projects
-                </div>
+                </button>
+                <button onClick={() => setActiveMode('mindmap')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${activeMode === 'mindmap' ? 'bg-indigo-600/20 text-indigo-300' : 'theme-text-muted hover:theme-bg-tertiary'}`}>
+                    <Network size={13} /> Mind Map
+                </button>
                 <div className="flex-1" />
                 <span className="text-[10px] text-gray-500">
                     {projects.length} writing projects
                 </span>
             </div>
 
-            {renderProjects()}
+            {activeMode === 'projects' && renderProjects()}
+            {activeMode === 'mindmap' && renderMindMap()}
         </div>
     );
 };
